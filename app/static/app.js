@@ -162,8 +162,29 @@ async function submitChat(event){
   const submit=$('chatForm').querySelector('button');submit.disabled=true;
   try{
     const data=await request('/api/chat',{method:'POST',body:JSON.stringify({article_id:state.selected.id,question,language:state.language})});
-    bubble.textContent=(['groq','ollama'].includes(data.generated_by)?'':'SOURCE REFERENCE MODE — No AI synthesis\n\n')+data.answer;
-    if(data.sources?.length){const links=data.sources.filter(s=>allowedLink(s.url)).map(s=>`[${s.index}] ${s.publisher}: ${s.url}`).join('\n');if(links)bubble.textContent+='\n\nLinks:\n'+links;}
+    const isDraft=['groq','ollama'].includes(data.generated_by) && data.claims?.length;
+    bubble.textContent=(isDraft?'AI DRAFT · CLAIMS REVIEWED AGAINST RSS EXCERPTS\n\n':'INSUFFICIENT SOURCE EVIDENCE / AI UNAVAILABLE\n\n')+data.answer;
+    if(isDraft){
+      for(const claim of data.claims){
+        const detail=document.createElement('div');detail.className='chat-evidence';
+        const heading=document.createElement('strong');heading.textContent=`RSS source [${claim.source}] · exact supporting excerpt`;
+        const excerpt=document.createElement('blockquote');excerpt.textContent=claim.quote;
+        detail.append(heading,excerpt);bubble.append(detail);
+      }
+    }
+    if(data.sources?.length){
+      const heading=document.createElement('p');heading.className='chat-evidence-note';
+      heading.textContent=isDraft?'Cited source links:':'Related source links (not proof of the requested answer):';bubble.append(heading);
+      for(const src of data.sources){
+        if(!allowedLink(src.url))continue;
+        const link=document.createElement('a');link.href=src.url;link.target='_blank';link.rel='noopener noreferrer';
+        link.className='chat-evidence-link';link.textContent=`[${src.index}] ${src.publisher} · Open original source ↗`;
+        bubble.append(link);
+      }
+    }
+    const note=document.createElement('p');note.className='chat-evidence-note';
+    note.textContent=data.caveat||'RSS excerpts are not independently fact checked. Check publisher articles.';
+    bubble.append(note);
   }catch(err){bubble.textContent='Request failed: '+err.message;}
   finally{submit.disabled=false;$('chatMessages').scrollTop=$('chatMessages').scrollHeight;}
 }

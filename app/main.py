@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import ai, core, research_v2
+from . import ai, core, research_v2, chat_v07
 from .live import monitor
 from .regions import REGIONS, TOPICS, LANGUAGES
 
@@ -29,7 +29,7 @@ async def lifespan(_app: FastAPI):
         await monitor.stop()
 
 
-app = FastAPI(title="BharatPulse AI", description="Source-grounded, state-wise Indian news intelligence", version="0.6.0", lifespan=lifespan)
+app = FastAPI(title="BharatPulse AI", description="Source-grounded, state-wise Indian news intelligence", version="0.7.0", lifespan=lifespan)
 STATIC = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
@@ -53,7 +53,7 @@ def homepage():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "BharatPulse AI", "version": "0.6.0"}
+    return {"status": "ok", "service": "BharatPulse AI", "version": "0.7.0"}
 
 
 @app.get("/api/meta")
@@ -74,7 +74,8 @@ async def meta():
         "ollama_enabled": ai.ENABLE_OLLAMA,
         "ollama_ready": await ai.ollama_is_ready(),
         "ollama_model": ai.OLLAMA_MODEL,
-        "limitations": "Headline / RSS summary metadata only; quotation/figure checks are not semantic fact-checking",
+        "limitations": "RSS snippets only; model-based semantic review is not independent fact-checking and cannot guarantee accuracy",
+        "chat_workflow": "v0.7: atomic English claims -> exact RSS quote / number check -> semantic review -> verified translation -> cited draft or abstention",
         "research_workflow": "v2: RSS discovery, relevant excerpts, quoted findings, publication-only timeline",
     }
 
@@ -247,15 +248,33 @@ async def chat(payload: ChatPayload):
     sources = [selected, *related]
     if await ai.llm_is_configured():
         try:
-            answer = await ai.ask_llm(f"Answer this reader's question using only the provided RSS metadata: {payload.question}. If sources do not establish the answer, output NO_SUPPORTED_EVIDENCE. Cite sources by [number].", sources, language=language)
-            if answer.strip() == "NO_SUPPORTED_EVIDENCE":
-                answer, mode = ai.no_information_message(language), "insufficient_evidence"
-            elif not ai.validate_citations(answer, len(sources)):
-                answer, mode = evidence_fallback(sources, language), "source_index_invalid_citations"
-            else:
+            result = await chat_v07.answer_grounded(payload.question, sources, language)
+            claims = result["claims"]
+            if claims:
+                answer = "\n\n".join(f"{claim['text']} [{claim['source']}]" for claim in claims)
                 mode = ai.active_provider()
-        except (httpx.HTTPError, RuntimeError, ValueError):
-            answer, mode = evidence_fallback(sources, language), "source_index"
+                used = {claim["source"] for claim in claims}
+                visible_sources = [{"index": i, **row} for i, row in enumerate(sources, 1) if i in used]
+            else:
+                answer, mode = ai.no_information_message(language), "insufficient_evidence"
+                visible_sources = [{"index": i, **row} for i, row in enumerate(sources, 1)]
+        except (httpx.HTTPError, RuntimeError, ValueError, TypeError, KeyError):
+            answer, mode = ai.no_information_message(language), "source_index_llm_unavailable"
+            result = {"claims": [], "rejected_claims": 0, "reason": "provider_unavailable"}
+            visible_sources = [{"index": i, **row} for i, row in enumerate(sources, 1)]
     else:
-        answer, mode = evidence_fallback(sources, language), "source_index"
-    return {"answer": answer, "generated_by": mode, "sources": [{"index": i, **a} for i, a in enumerate(sources, 1)], "caveat": "Based on RSS metadata and snippets, not full articles."}
+        answer, mode = ai.no_information_message(language), "source_index"
+        result = {"claims": [], "rejected_claims": 0, "reason": "provider_unavailable"}
+        visible_sources = [{"index": i, **row} for i, row in enumerate(sources, 1)]
+    return {
+        "answer": answer, "generated_by": mode,
+        "sources": visible_sources,
+        "claims": result["claims"],
+        "rejected_claims": result["rejected_claims"],
+        "evidence_status": result["reason"],
+        "caveat": (
+            "Source-anchored AI draft from RSS headlines and excerpts only. "
+            "Automated quotation/semantic checks cannot establish factual truth or independent corroboration. "
+            "Verify with primary sources before reporting."
+        ),
+    }

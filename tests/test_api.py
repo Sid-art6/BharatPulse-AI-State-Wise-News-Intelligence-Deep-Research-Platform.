@@ -51,10 +51,29 @@ def test_refresh_saves_only_feed_metadata(monkeypatch, tmp_path):
 
 def test_watch_on_open_schedules_live_ingestion(monkeypatch, tmp_path):
     """Opening a region starts a due background fetch with no manual refresh."""
+    import asyncio
     import time
-    from app import core
+    from app import ai, core
+    from app.live import monitor
     monkeypatch.setattr(core, "DATA_DIR", tmp_path)
     monkeypatch.setattr(core, "DB_PATH", tmp_path / "test.db")
+
+    # Keep this test entirely offline and independent of the user's .env.
+    # Otherwise a Groq-enabled machine can spend >1.5 s on a national feed
+    # check while the selected state waits for the single feed semaphore.
+    async def offline_filter(articles):
+        return articles, "test_offline_filter"
+
+    async def offline_previews(_articles):
+        return {}
+
+    async def idle_national_poller():
+        # This test checks /watch scheduling, not startup national polling.
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(ai, "optional_llm_filter", offline_filter)
+    monkeypatch.setattr(ai, "english_previews", offline_previews)
+    monkeypatch.setattr(monitor, "_run", idle_national_poller)
 
     async def stub(region):
         return core.parse_rss(

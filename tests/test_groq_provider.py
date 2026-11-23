@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from app import ai, core
+from app import ai, core, chat_v07
 
 
 @pytest.fixture(autouse=True)
@@ -94,12 +94,14 @@ def test_chat_uses_groq_provider_with_cited_evidence(monkeypatch, tmp_path):
     async def empty_news(region):
         return []
     monkeypatch.setattr(core, 'fetch_news', empty_news)
-    async def answer(prompt, sources, language='English'):
+    async def answer(question, sources, language):
         assert language == 'Hindi'
-        assert 'rss metadata' in prompt.lower()
+        assert 'article report' in question.lower()
         assert sources[0]['publisher'] == 'Example Paper'
-        return 'RSS स्रोत के अनुसार कर्नाटक में एक परिवहन घोषणा हुई। [1]'
-    monkeypatch.setattr(ai, 'ask_llm', answer)
+        return {'claims':[{'id':1,'text':'कर्नाटक परिवहन घोषणा प्रकाशित हुई।', 'claim_en':'Karnataka transport announcement was published.',
+                          'source':1,'quote':'Karnataka transport announcement'}],
+                'rejected_claims':0, 'reason':'reviewed_rss_claims'}
+    monkeypatch.setattr(chat_v07, 'answer_grounded', answer)
     with TestClient(app) as client:
         source = core.parse_rss(b'<rss><channel><item><title>Karnataka transport announcement</title><link>https://news.example/rail</link><description>A transport announcement was published.</description><source>Example Paper</source></item></channel></rss>', 'Karnataka')
         core.save_articles(source)
@@ -125,9 +127,9 @@ def test_invalid_model_citation_is_rejected(monkeypatch, tmp_path):
     async def empty_news(region):
         return []
     monkeypatch.setattr(core, 'fetch_news', empty_news)
-    async def false_citation(*args, **kwargs):
-        return 'An unsupported claim [98].'
-    monkeypatch.setattr(ai, 'ask_llm', false_citation)
+    async def false_citation(question, sources, language):
+        return {'claims':[], 'rejected_claims':1, 'reason':'unsupported_claims'}
+    monkeypatch.setattr(chat_v07, 'answer_grounded', false_citation)
     with TestClient(app) as client:
         source = core.parse_rss(b'<rss><channel><item><title>Kerala coastal protection update</title><link>https://news.example/coast</link><description>Kerala coastal project proposed.</description><source>Test Publisher</source></item></channel></rss>', 'Kerala')
         core.save_articles(source)
@@ -135,5 +137,5 @@ def test_invalid_model_citation_is_rejected(monkeypatch, tmp_path):
             'article_id': source[0]['id'], 'question': 'What happened?',
         })
         data = response.json()
-        assert data['generated_by'] == 'source_index_invalid_citations'
+        assert data['generated_by'] == 'insufficient_evidence'
         assert 'An unsupported claim' not in data['answer']
