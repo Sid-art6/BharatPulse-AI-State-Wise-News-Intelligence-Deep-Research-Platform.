@@ -1,0 +1,12 @@
+services:
+  web:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      BHARATPULSE_DATA_DIR: /data
+      ENABLE_OLLAMA: "false"
+    volumes:
+      - bharatpulse_data:/data
+volumes:
+  bharatpulse_data:
