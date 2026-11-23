@@ -6,7 +6,8 @@
   <meta name="theme-color" content="#0b1222" />
   <title>BharatPulse AI — News intelligence, decoded</title>
   <meta name="description" content="Explore Indian news by region, research related coverage and ask questions with grounded source references." />
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=0.8-map-sync-1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
   <div class="app-layout">
@@ -16,11 +17,12 @@
       <nav class="side-nav" aria-label="Main navigation">
         <a href="#overview" class="nav-link active" data-nav="overview"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="5" rx="1"/><rect x="13" y="10" width="8" height="11" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/></svg> Overview</a>
         <a href="#explorer" class="nav-link" data-nav="explorer"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg> News explorer</a>
+        <a href="#weather" class="nav-link" data-nav="weather"><svg viewBox="0 0 24 24"><path d="M5 17h14a4 4 0 0 0-1.5-7.7A6 6 0 0 0 6 9.5 4 4 0 0 0 5 17z"/></svg> Weather intelligence</a>
         <a href="#methodology" class="nav-link" data-nav="methodology"><svg viewBox="0 0 24 24"><path d="M5 4h14M5 10h14M5 16h7"/><circle cx="18" cy="17" r="3"/></svg> Methodology</a>
       </nav>
       <div class="sidebar-bottom">
         <div class="pipeline-card"><div class="mini-label">PIPELINE STATUS <i class="status-dot"></i></div><strong>RSS → Analyse → Explore</strong><p>RSS sources: Google News, regional discovery and BBC India. X and Google Trends are not connected in this MVP.</p></div>
-        <div class="side-foot">LOCAL WORKSPACE <span>v0.6</span></div>
+        <div class="side-foot">LOCAL WORKSPACE <span>v0.8</span></div>
       </div>
     </aside>
 
@@ -48,6 +50,20 @@
           <div class="news-grid" id="newsGrid"><div class="loading-view">Preparing headlines…</div></div>
         </section>
 
+
+        <section class="weather-section" id="weather" aria-labelledby="weather-title">
+          <div class="section-heading"><div><div class="eyebrow eyebrow-dark">02 / METEOROLOGICAL INTELLIGENCE</div><h2 id="weather-title">Weather intelligence</h2><p>Forecast measurements from Open-Meteo, weather-related headlines from the news index, and a source-grounded AI explanation.</p></div><span class="weather-provider-chip">OPEN-METEO · 7-DAY FORECAST</span></div>
+          <div class="data-banner live-banner"><div class="banner-icon">i</div><div><strong>Model forecast, not official warning</strong><span>Values apply to selected city coordinates, not the entire state. Map markers show city points rather than weather radar or a continuous temperature layer.</span></div></div>
+          <div class="weather-controls"><label class="field"><span>WEATHER LOCATION</span><select id="weatherCitySelect" aria-label="Select a city"><option value="Bengaluru">Bengaluru</option></select></label><button type="button" class="refresh-btn" id="weatherRefresh">Check forecast</button><div class="weather-update" id="weatherUpdated" role="status">Select a city to load a live forecast.</div></div>
+          <div class="weather-summary-grid">
+            <div class="weather-main-card"><div class="mini-label">CURRENT CONDITIONS / SELECTED CITY</div><h3 id="weatherCityTitle">Bengaluru</h3><div class="weather-temp" id="weatherTemp">—</div><p id="weatherCurrent">Loading weather provider…</p><div class="weather-attributes"><span id="weatherHumidity">Humidity —</span><span id="weatherWind">Wind —</span></div></div>
+            <div class="weather-map-panel"><div class="map-title"><strong>India weather map</strong><span id="weatherMapSelection" aria-live="polite">City-level temperature markers · tap to select</span></div><div id="weatherMap" role="region" aria-label="Interactive Indian city weather map"></div><div class="map-fallback" id="weatherMapFallback" hidden>Map tiles unavailable. Use the city selector above; forecasts remain accessible.</div><div class="map-legend">City-point model estimates from Open-Meteo · Map © OpenStreetMap contributors · Approximate city coordinates</div></div>
+          </div>
+          <div class="weather-subheading"><h3>Next 7 days</h3><p>Daily temperature range, rain probability and model precipitation</p></div><div id="weatherDaily" class="weather-daily"><p>Loading daily forecast…</p></div>
+          <div class="weather-bottom-grid"><div class="weather-news-panel"><div class="weather-subheading"><h3>Weather-related news</h3><p>Only indexed regional RSS headlines matching weather terms</p></div><div id="weatherNews" class="weather-news-list">Checking indexed headlines…</div></div>
+          <div class="weather-ai-panel"><div class="weather-subheading"><h3>Ask Weather AI</h3><p>Uses forecast data, not the model's own predictions</p></div><div class="weather-answer" id="weatherAnswer" role="status">Ask about rain, temperature or the coming days. Responses use Open-Meteo forecast data, with multilingual translation review when Groq is available.</div><form id="weatherChatForm" class="weather-ai-form"><input id="weatherQuestion" maxlength="800" minlength="2" required placeholder="Will it rain in the next three days?" aria-label="Ask a weather question"/><button class="btn btn-primary" type="submit">Ask AI</button></form><p class="weather-ai-note">The response language is controlled by the main “AI Response Language” selector above. The news headlines are supplementary, not forecast evidence.</p></div></div>
+        </section>
+
         <section class="intelligence-footer" id="methodology"><div class="footer-copy"><div class="eyebrow eyebrow-dark">02 / HOW THE SYSTEM THINKS</div><h2>Intelligence with<br><em>traceable evidence.</em></h2><p>Every result begins with original provider links. Regional and topic tags use transparent keyword rules in this MVP. Optional Groq or Ollama generates a source-constrained synthesis; neither RSS snippets nor AI summaries are independent fact-checks.</p></div><div class="method-steps"><div><span>01</span><strong>Discover</strong><p>Fetch English and regional-language headlines from RSS feeds every five minutes.</p></div><div><span>02</span><strong>Organise</strong><p>Clean, deduplicate and tag region/topic mentions.</p></div><div><span>03</span><strong>Investigate</strong><p>Locate related coverage and compare source metadata.</p></div><div><span>04</span><strong>Ask</strong><p>Use an optional LLM with explicit source citations.</p></div></div></section>
         <footer class="page-footer"><strong>BharatPulse<span>AI</span></strong><p>Local research prototype · Headlines and excerpts are not verified full-text reports.</p><span>BUILT FOR EXPLORATION, NOT ASSUMPTIONS.</span></footer>
       </div>
@@ -59,6 +75,7 @@
     <div class="drawer-header"><span class="drawer-kicker" id="drawerKicker">INTELLIGENCE DESK</span><button class="icon-btn" id="drawerClose" aria-label="Close panel">✕</button></div>
     <div class="drawer-scroll"><div class="drawer-topic" id="drawerTopic">RESEARCH REPORT</div><h2 id="drawerTitle">Article title</h2><p class="drawer-sub" id="drawerSub"></p><div class="drawer-tabs"><button id="researchTab" class="drawer-tab active">Deep research</button><button id="chatTab" class="drawer-tab">Ask AI</button></div><div id="researchPanel"><div class="result-box" id="researchOutput">Select “Start research” to build an excerpt-grounded brief with a publication-only timeline.</div><button class="btn btn-primary run-btn" id="researchRun">Build research brief <span>↗</span></button><div id="sourceList"></div></div><div id="chatPanel" hidden><div id="chatMessages" class="chat-messages"><div class="assistant-bubble">Ask a question about this headline. Answers will only use available RSS metadata; a configured Groq or Ollama model is required for AI-generated explanations.</div></div><form id="chatForm" class="chat-form"><input id="chatInput" placeholder="What do these sources tell us?" minlength="2" maxlength="1200" required /><button aria-label="Send question" type="submit">↗</button></form><div class="chat-disclaimer">AI can be inaccurate. Verify against linked reporting.</div></div></div>
   </section>
-  <script src="/static/app.js" defer></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+  <script src="/static/app.js?v=0.8-map-sync-1" defer></script>
 </body>
 </html>

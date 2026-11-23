@@ -30,10 +30,27 @@ def test_health_and_demo_dashboard(monkeypatch, tmp_path):
 
 
 def test_refresh_saves_only_feed_metadata(monkeypatch, tmp_path):
-    from app import core
-    from app import main
+    import asyncio
+    from app import ai, core
+    from app.live import monitor
     monkeypatch.setattr(core, "DATA_DIR", tmp_path)
     monkeypatch.setattr(core, "DB_PATH", tmp_path / "test.db")
+
+    # Unit tests should not depend on live Groq credentials, rate limits or
+    # background national feed polling. The region refresh is still exercised.
+    async def offline_filter(articles):
+        return articles, "test_offline_filter"
+
+    async def offline_previews(_articles):
+        return {}
+
+    async def idle_national_poller():
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(ai, "optional_llm_filter", offline_filter)
+    monkeypatch.setattr(ai, "english_previews", offline_previews)
+    monkeypatch.setattr(monitor, "_run", idle_national_poller)
+
     async def stub(region):
         return core.parse_rss(b'''<rss><channel><item><title>Assam rail update - Paper</title><link>https://news.google.com/rss/articles/xyz</link><description>Assam rail update</description><source>Paper</source></item></channel></rss>''', region)
     monkeypatch.setattr(core,"fetch_news",stub)
@@ -58,9 +75,8 @@ def test_watch_on_open_schedules_live_ingestion(monkeypatch, tmp_path):
     monkeypatch.setattr(core, "DATA_DIR", tmp_path)
     monkeypatch.setattr(core, "DB_PATH", tmp_path / "test.db")
 
-    # Keep this test entirely offline and independent of the user's .env.
-    # Otherwise a Groq-enabled machine can spend >1.5 s on a national feed
-    # check while the selected state waits for the single feed semaphore.
+    # Test regional on-open scheduling without competing external requests or
+    # LLM calls; do not weaken the endpoint's behavioural assertions.
     async def offline_filter(articles):
         return articles, "test_offline_filter"
 
@@ -68,7 +84,6 @@ def test_watch_on_open_schedules_live_ingestion(monkeypatch, tmp_path):
         return {}
 
     async def idle_national_poller():
-        # This test checks /watch scheduling, not startup national polling.
         await asyncio.Event().wait()
 
     monkeypatch.setattr(ai, "optional_llm_filter", offline_filter)

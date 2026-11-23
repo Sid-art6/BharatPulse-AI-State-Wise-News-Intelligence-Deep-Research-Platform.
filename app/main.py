@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import ai, core, research_v2, chat_v07
+from . import ai, core, research_v2, chat_v07, weather
 from .live import monitor
 from .regions import REGIONS, TOPICS, LANGUAGES
 
@@ -29,7 +29,7 @@ async def lifespan(_app: FastAPI):
         await monitor.stop()
 
 
-app = FastAPI(title="BharatPulse AI", description="Source-grounded, state-wise Indian news intelligence", version="0.7.0", lifespan=lifespan)
+app = FastAPI(title="BharatPulse AI", description="Source-grounded, state-wise Indian news intelligence", version="0.8.0", lifespan=lifespan)
 STATIC = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
@@ -53,7 +53,7 @@ def homepage():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "BharatPulse AI", "version": "0.7.0"}
+    return {"status": "ok", "service": "BharatPulse AI", "version": "0.8.0"}
 
 
 @app.get("/api/meta")
@@ -77,6 +77,7 @@ async def meta():
         "limitations": "RSS snippets only; model-based semantic review is not independent fact-checking and cannot guarantee accuracy",
         "chat_workflow": "v0.7: atomic English claims -> exact RSS quote / number check -> semantic review -> verified translation -> cited draft or abstention",
         "research_workflow": "v2: RSS discovery, relevant excerpts, quoted findings, publication-only timeline",
+        "weather": {"status": "implemented", "provider": "Open-Meteo", "days": 7, "cities": len(weather.CITY_CATALOG), "map": "city point temperatures", "no_unsupported_forecasts": True},
     }
 
 
@@ -88,6 +89,56 @@ async def ai_connection_check():
     except ai.LLMServiceError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
+
+
+
+# Weather Intelligence (v0.8): provider-derived, city-specific readings.
+@app.get("/api/weather/cities")
+def weather_cities():
+    return {"items": weather.cities(), "source": "Representative India city coordinates"}
+
+
+@app.get("/api/weather/forecast")
+async def weather_forecast(city: str = Query(default="Bengaluru", max_length=80)):
+    if city not in weather.CITY_INDEX:
+        raise HTTPException(status_code=422, detail="Choose a listed Indian city")
+    try:
+        return await weather.fetch_forecast(city)
+    except (httpx.HTTPError, ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail="Current weather forecast is unavailable. Try again later.") from exc
+
+
+@app.get("/api/weather/map")
+async def weather_map():
+    return await weather.fetch_map_weather()
+
+
+@app.get("/api/weather/news")
+def weather_related_news(region: str = "Karnataka"):
+    validate_region(region)
+    items = weather.weather_news(region)
+    return {"items": items, "count": len(items), "region": region,
+            "caveat": "Indexed RSS titles and excerpts only; headlines are not official weather warnings."}
+
+
+class WeatherChatPayload(BaseModel):
+    city: str = Field(min_length=2, max_length=80)
+    question: str = Field(min_length=2, max_length=800)
+    language: str = "English"
+
+
+@app.post("/api/weather/chat")
+async def weather_chat(payload: WeatherChatPayload):
+    language = validate_language(payload.language)
+    if payload.city not in weather.CITY_INDEX:
+        raise HTTPException(status_code=422, detail="Choose a listed Indian city")
+    try:
+        forecast = await weather.fetch_forecast(payload.city)
+    except (httpx.HTTPError, ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail="Weather data is unavailable; AI cannot provide a current forecast.") from exc
+    answer = await weather.weather_answer(forecast, payload.question, language)
+    return {**answer, "city": payload.city, "forecast_fetched_at": forecast["fetched_at"],
+            "news_note": "Weather-related news is shown separately; it is not forecast evidence."}
 
 @app.get("/api/news")
 def news(

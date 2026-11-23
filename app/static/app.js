@@ -188,6 +188,180 @@ async function submitChat(event){
   }catch(err){bubble.textContent='Request failed: '+err.message;}
   finally{submit.disabled=false;$('chatMessages').scrollTop=$('chatMessages').scrollHeight;}
 }
+// v0.8 Weather Intelligence. No fake weather values: empty provider responses stay empty.
+const weatherState={city:'Bengaluru',forecast:null,cities:[],map:null,markers:[],markerByCity:new Map(),selectedLocationMarker:null,mapLoaded:false,loading:false,requestId:0};
+function weatherNumber(value,suffix='',digits=0){return typeof value==='number'&&Number.isFinite(value)?`${value.toFixed(digits)}${suffix}`:'Unavailable';}
+function mapTemperature(value){return typeof value==='number'?`${Math.round(value)}°C`:'No data';}
+function weatherMapIcon(city,temperature){
+  const label=`${escapeHTML(city)} · ${escapeHTML(mapTemperature(temperature))}`;
+  return window.L.divIcon({html:`<span class="weather-temp-marker">${label}</span>`,className:'',iconSize:[150,25],iconAnchor:[60,15]});
+}
+// Keep the selected city, forecast and map in sync. Works even for cities not
+// included among the 12 sampled temperature markers on the overview map.
+function syncWeatherMapToCity({focus=true}={}){
+  const place=weatherState.cities.find(item=>item.city===weatherState.city);
+  if(!place)return;
+  const status=$('weatherMapSelection');
+  if(status)status.textContent=`Selected: ${place.city} · ${place.region}`;
+  const map=weatherState.map;
+  if(!map)return; // A lazy-loaded map will catch up when it initializes.
+  const coords=[place.latitude,place.longitude];
+  const hasForecast=weatherState.forecast?.city===place.city;
+  const temperature=hasForecast?weatherState.forecast.current?.temperature_c:null;
+  const popup=`<strong>${escapeHTML(place.city)}, ${escapeHTML(place.region)}</strong><br>${escapeHTML(mapTemperature(temperature))} · Selected location`;
+  if(!weatherState.selectedLocationMarker){
+    weatherState.selectedLocationMarker=window.L.circleMarker(coords,{
+      radius:15,color:'#397b3a',weight:3,fillColor:'#b2ed70',fillOpacity:0.28
+    }).addTo(map);
+  }else{
+    weatherState.selectedLocationMarker.setLatLng(coords);
+  }
+  weatherState.selectedLocationMarker.bindPopup(popup);
+  for(const [name,marker] of weatherState.markerByCity){
+    const element=marker.getElement();
+    element?.querySelector('.weather-temp-marker')?.classList.toggle('is-selected',name===place.city);
+    marker.setZIndexOffset(name===place.city?1000:0);
+  }
+  if(hasForecast&&typeof temperature==='number'){
+    const marker=weatherState.markerByCity.get(place.city);
+    if(marker){
+      marker.setIcon(weatherMapIcon(place.city,temperature));
+      marker.getElement()?.querySelector('.weather-temp-marker')?.classList.add('is-selected');
+    }
+  }
+  if(focus){
+    map.invalidateSize();
+    map.setView(coords,Math.max(map.getZoom(),7),{animate:true});
+    const labelled=weatherState.markerByCity.get(place.city);
+    (labelled||weatherState.selectedLocationMarker).openPopup();
+  }
+}
+function chooseWeatherCity(city){
+  if(!weatherState.cities.some(item=>item.city===city))return;
+  const changed=weatherState.city!==city;
+  weatherState.city=city;$('weatherCitySelect').value=city;
+  if(changed){
+    weatherState.forecast=null; // Do not display a previous city's values as the new city's values.
+    $('weatherAnswer').textContent=`Location changed to ${city}. Ask Weather AI for this city's forecast.`;
+  }
+  syncWeatherMapToCity(); // Recenter immediately, without waiting for an API response.
+  loadWeather();
+}
+async function loadWeather(){
+  const requestId=++weatherState.requestId;
+  weatherState.loading=true;
+  const selected=weatherState.city;
+  $('weatherUpdated').textContent='Checking Open-Meteo forecast…';
+  $('weatherCityTitle').textContent=selected;
+  $('weatherTemp').textContent='—';
+  $('weatherDaily').innerHTML='<p class="weather-empty">Fetching seven-day forecast…</p>';
+  try{
+    const forecast=await request(`/api/weather/forecast?${new URLSearchParams({city:selected})}`);
+    if(selected!==weatherState.city)return;
+    weatherState.forecast=forecast;
+    const current=forecast.current||{};
+    $('weatherTemp').textContent=weatherNumber(current.temperature_c,'°C',1);
+    $('weatherCurrent').textContent=current.description||'Condition not available';
+    $('weatherHumidity').textContent=`Humidity ${weatherNumber(current.humidity_percent,'%')}`;
+    $('weatherWind').textContent=`Wind ${weatherNumber(current.wind_kmh,' km/h',1)}`;
+    $('weatherUpdated').textContent=`Weather provider: ${forecast.provider} · Retrieved ${new Date(forecast.fetched_at).toLocaleString('en-IN')} · City-specific model forecast`;
+    syncWeatherMapToCity({focus:false}); // Reflect the selected city's latest temperature in its map marker.
+    $('weatherDaily').innerHTML=forecast.daily.map(day=>`<div class="weather-day"><strong>${escapeHTML(new Date(day.date+'T12:00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'}))}</strong><span class="day-condition">${escapeHTML(day.description)}</span><span class="day-temps">${weatherNumber(day.temperature_2m_min,'°')}–${weatherNumber(day.temperature_2m_max,'°')}</span><span class="day-rain">Rain chance ${weatherNumber(day.precipitation_probability_max,'%')}<br>Precip. ${weatherNumber(day.precipitation_sum,' mm',1)}</span></div>`).join('');
+  }catch(err){
+    weatherState.forecast=null;$('weatherCurrent').textContent='Forecast unavailable';
+    $('weatherUpdated').textContent='Open-Meteo is unavailable. No forecast has been invented.';
+    $('weatherDaily').innerHTML=`<div class="weather-empty">${escapeHTML(err.message)}. Try again later.</div>`;
+  }finally{if(requestId===weatherState.requestId)weatherState.loading=false;}
+  if(requestId!==weatherState.requestId)return;
+  try{
+    const place=weatherState.cities.find(c=>c.city===selected);
+    if(place){
+      await request('/api/news/watch',{method:'POST',body:JSON.stringify({region:place.region})});
+      await loadWeatherNews(place.region);
+    }
+  }catch{ /* Weather news is supplementary and must not block forecast viewing. */ }
+}
+async function loadWeatherNews(region){
+  try{
+    const news=await request(`/api/weather/news?${new URLSearchParams({region})}`);
+    $('weatherNews').innerHTML=news.items.length ? news.items.map(item=>`<article class="weather-news-item">${allowedLink(item.url)?`<a href="${escapeHTML(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(item.title)}</a>`:`<strong>${escapeHTML(item.title)}</strong>`}<small>${escapeHTML(item.publisher)} · ${escapeHTML(relativeDate(item.published_at))}</small><div class="weather-news-actions"><button type="button" data-weather-research="${escapeHTML(item.id)}">Research ↗</button><button type="button" data-weather-chat="${escapeHTML(item.id)}">Ask AI ↗</button></div></article>`).join('') : '<p class="weather-empty">No matching weather-related reports in the indexed regional RSS headlines. This does not mean no weather events have occurred.</p>';
+  }catch(err){$('weatherNews').textContent='Could not load weather news: '+err.message;}
+}
+async function showWeatherMap(){
+  if(weatherState.mapLoaded)return;
+  weatherState.mapLoaded=true;
+  if(typeof window.L==='undefined'){$('weatherMapFallback').hidden=false;return;}
+  const L=window.L;
+  weatherState.map=L.map('weatherMap',{scrollWheelZoom:false}).setView([22.5,79.0],5);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap contributors',maxZoom:18
+  }).addTo(weatherState.map);
+  syncWeatherMapToCity(); // Focus the initial city even before sample markers are fetched.
+  try{
+    const data=await request('/api/weather/map');
+    for(const city of data.points){
+      const liveTemperature=weatherState.forecast?.city===city.city
+        ?weatherState.forecast.current?.temperature_c:city.temperature_c;
+      const label=`${escapeHTML(city.city)} · ${escapeHTML(mapTemperature(liveTemperature))}`;
+      const marker=L.marker([city.latitude,city.longitude],{
+        icon:weatherMapIcon(city.city,liveTemperature)
+      }).addTo(weatherState.map);
+      marker.bindPopup(`${label}<p>Click the marker for the city forecast.</p>`);
+      marker.on('click',()=>chooseWeatherCity(city.city));
+      weatherState.markers.push(marker);
+      weatherState.markerByCity.set(city.city,marker);
+    }
+    syncWeatherMapToCity({focus:false}); // Highlight the current selection after async markers load.
+  }catch{
+    $('weatherMapFallback').hidden=false;
+    $('weatherMapFallback').textContent='City temperature measurements unavailable; choose a city from the dropdown.';
+  }
+  setTimeout(()=>weatherState.map?.invalidateSize(),150);
+}
+async function sendWeatherChat(event){
+  event.preventDefault();
+  const input=$('weatherQuestion'),question=input.value.trim();if(question.length<2)return;
+  const button=$('weatherChatForm').querySelector('button');button.disabled=true;
+  const requestedCity=weatherState.city;
+  $('weatherAnswer').textContent='Checking forecast measurements and preparing an evidence-constrained response…';
+  try{
+    const data=await request('/api/weather/chat',{method:'POST',body:JSON.stringify({city:requestedCity,question,language:state.language})});
+    if(requestedCity===weatherState.city)$('weatherAnswer').textContent=`${data.answer}\n\nSource: ${data.source} · ${data.generated_by}\n${data.caveat}`;
+  }catch(err){if(requestedCity===weatherState.city)$('weatherAnswer').textContent='Weather assistant unavailable: '+err.message;}
+  finally{button.disabled=false;}
+}
+async function initWeather(){
+  try{
+    const info=await request('/api/weather/cities');weatherState.cities=info.items;
+    $('weatherCitySelect').innerHTML=info.items.map(c=>`<option value="${escapeHTML(c.city)}">${escapeHTML(c.city)} · ${escapeHTML(c.region)}</option>`).join('');
+    $('weatherCitySelect').value=weatherState.city;
+    syncWeatherMapToCity({focus:false});
+    await loadWeather();
+  }catch(err){$('weatherUpdated').textContent='Weather module unavailable: '+err.message;}
+  $('weatherCitySelect').addEventListener('change',e=>chooseWeatherCity(e.target.value));
+  $('weatherRefresh').addEventListener('click',loadWeather);
+  $('weatherChatForm').addEventListener('submit',sendWeatherChat);
+  $('weatherNews').addEventListener('click',async event=>{
+    const button=event.target.closest('[data-weather-research],[data-weather-chat]');
+    if(!button)return;
+    const id=button.dataset.weatherResearch||button.dataset.weatherChat;
+    try{
+      if(!state.articles.some(a=>a.id===id)){
+        const item=await request(`/api/news/${encodeURIComponent(id)}`);
+        if(item.is_demo)return;
+        state.articles.push(item);
+      }
+      openDrawer(id,button.hasAttribute('data-weatherChat')?'chat':'research');
+    }catch(err){$('weatherNews').insertAdjacentText('beforeend',' · Could not load selected story: '+err.message);}
+  });
+  if('IntersectionObserver' in window){
+    const observer=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting)){observer.disconnect();showWeatherMap();}},{rootMargin:'200px'});
+    observer.observe($('weather'));
+  }else{showWeatherMap();}
+  document.querySelector('[data-nav="weather"]')?.addEventListener('click',showWeatherMap);
+  // Forecast cache TTL is ten minutes; don't repeatedly load upstream when a tab is hidden.
+  window.setInterval(()=>{if(!document.hidden&&weatherState.forecast&&Date.now()-new Date(weatherState.forecast.fetched_at).getTime()>600000)loadWeather();},60000);
+}
 async function init(){
   try{
     state.metadata=await request('/api/meta');
@@ -225,6 +399,7 @@ async function init(){
   // Opening the page immediately asks the server to check freshness and,
   // if due, start a non-blocking RSS retrieval. Cached items appear at once.
   setMode(false);
+  initWeather();
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkLiveUpdates();});
   window.setInterval(checkLiveUpdates,20000); // UI sync, distinct from 5-minute RSS polling.
 }
