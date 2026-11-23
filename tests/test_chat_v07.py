@@ -159,4 +159,4 @@ def test_chat_endpoint_returns_only_cited_verified_sources(monkeypatch, tmp_path
         assert data['sources'][0]['index']==1
         assert data['claims'][0]['quote']==QUOTE
         assert data['caveat'].startswith('Source-anchored AI draft')
-        assert client.get('/api/health').json()['version']=='0.8.0'
+        assert client.get('/api/health').json()['version']=='0.9.0'

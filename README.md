@@ -2,9 +2,9 @@
 
 **Browse Indian news by state → discover regional reporting → research related headlines → ask a source-grounded AI.**
 
-A runnable, local-first prototype using **FastAPI, SQLite, JavaScript, RSS, Open-Meteo weather forecasts and optional GroqCloud or Ollama**. **v0.8** adds a separate Weather Intelligence section while preserving the v0.7 multilingual, excerpt-grounded news chatbot. It is an **MVP, not a production-deployed news, meteorology, or official warning service**.
+A runnable, local-first prototype using **FastAPI, SQLite, JavaScript, RSS, Open-Meteo, real LangGraph and optional GroqCloud/Ollama + LangSmith**. **v0.9** adds an explicit, multi-stage LangGraph Deep Research workflow and opt-in LangSmith tracing, preserving v0.8 Weather Intelligence, map synchronisation and v0.7 source-grounded chat. This remains an **MVP, not a production news, meteorology or independent fact-checking service**.
 
-## What's implemented in v0.8
+## What's implemented in v0.9
 
 | Capability | Actual behaviour |
 |---|---|
@@ -16,7 +16,8 @@ A runnable, local-first prototype using **FastAPI, SQLite, JavaScript, RSS, Open
 | **Response language** | Choose **English (default)**, Hindi, Bengali, Tamil, Telugu, Kannada, Malayalam, Marathi, Gujarati, Punjabi, Odia, Assamese or Urdu for the optional AI chat and research brief. |
 | **Sources** | Google News RSS metadata, regional-language Google News searches, and BBC India RSS for national coverage. These do **not** imply direct integrations with every publisher. |
 | **AI filtering** | Optional Groq or Ollama screens up to 20 **new** headlines per regional feed check for news relevance (previously indexed or rejected headlines are not repeatedly screened); without it, deterministic cleaning, deduplication, region and topic tagging still work. |
-| **Research** | Searches related RSS metadata, calls Groq/Ollama for structured JSON claims with literal quotation anchors, screens claims for excerpt/source alignment and unsupported figures, then renders source-linked findings, explicit unknowns and a **publication-only** timeline. It politely abstains when evidence is insufficient. No full-text crawling. |
+| **Research v0.9 — real LangGraph** | Six workflow nodes: deterministic planner → RSS discovery → stored-source retrieval → Groq/Ollama quoted synthesis → conservative model semantic review → report assembly. Conditional routing skips LLM work if unavailable. A user-provided research angle guides synthesis but **is not evidence**. All approved findings still require exact RSS excerpt quotes, numeric checks and review. Reports include an inspectable execution-stage trace and publication-only timeline. |
+| **Optional LangSmith (v0.9)** | Set `LANGSMITH_TRACING=true`, an API key, and a project name in local `.env`; compiled LangGraph runs and LLM completions become traceable. **Disabled by default.** Traces may contain user questions, source snippets, prompts, and model output and are uploaded to LangSmith. No tracing credentials are returned by API endpoints. |
 | **Chat v0.7** | Generates short **atomic English claims** for the selected article and related RSS metadata. Requires an exact quotation from the claimed source, checks citation indices and figures, and uses a separate model-based semantic entailment review. Only approved claims may be translated; translations receive a separate equivalence check. Fails closed to a polite insufficient-evidence response if review fails. Shows supporting quotes and cited publisher links. This reduces risk but is **not a factual-accuracy guarantee**. |
 | **No evidence** | The service responds politely that available sources do not establish the answer, including a selected-language fallback even without a model. |
 | **Demo mode** | Clearly fictional articles, isolated from real live news. |
@@ -31,7 +32,7 @@ A runnable, local-first prototype using **FastAPI, SQLite, JavaScript, RSS, Open
 
 - Direct X API, Google Trends, or direct regional publisher API integrations; these need authorisation and provider-by-provider licensing review.
 - Licensed full-article ingestion, real-time push notifications, guaranteed coverage for every region/language, or a verified fake-news detector.
-- LangGraph multi-agent orchestration, semantic vector search, independent fact-checking, human editorial approvals, user accounts, rate limiting, cloud deployment, or production monitoring. v0.7 uses a model-based semantic *review*, not authoritative entailment verification.
+- **Durable LangGraph checkpointing**, cross-user memory, background jobs, semantic vector search, independent fact-checking, human editorial approvals, user accounts, rate limiting, cloud deployment or production monitoring. The v0.9 workflow is stateless per request and its model review is **not authoritative fact verification**.
 - Guaranteed accuracy of model-written translations or AI claims. **RSS snippets are short, incomplete, unverified source descriptions** and citations are numerical references, not independent verification.
 - Weather radar, official IMD alerts, hyperlocal forecasts for arbitrary GPS coordinates, terrain-level weather simulation, or guaranteed multilingual weather translation. The map shows a curated set of city-level model readings only.
 
@@ -43,16 +44,16 @@ Status means **implemented and covered by local automated tests**, not an indepe
 |---|---|---|
 | **v0.6** | Live RSS news, Groq RAG, multilingual responses and RSS-grounded research | ✓ Complete (previous release) |
 | **v0.7** | Quote-anchored claims, multilingual translation review, safer abstentions | ✓ Complete (49 tests on user's Windows laptop) |
-| **v0.8** | Multilingual Weather Intelligence, seven-day model forecasts, interactive city-point weather map, regional weather news and forecast Q&A | ✓ Implemented; **offline automated tests pass** — live weather-provider verification on Windows pending |
-| **v0.9** | LangGraph multi-agent Deep Research orchestration | ○ Planned |
+| **v0.8** | Multilingual Weather Intelligence, seven-day model forecasts, interactive city-point weather map, regional weather news and forecast Q&A | ✓ Complete; 55 tests previously passed on Windows; live Bengaluru English/Hindi forecast manually checked |
+| **v0.9** | Real LangGraph Deep Research orchestration, optional research angle, evidence review trace and LangSmith integration | **Code implemented; real LangGraph + LangSmith integration testing on Windows pending** |
 | **v0.10** | More regional news publishers, licensing review and improved retrieval | ○ Planned |
 | **v1.0** | Security hardening, monitoring, evaluation and deployment-readiness review | ○ Planned |
 
-**v0.8 data boundary:** Open-Meteo supplies the forecast measurements; Groq/Ollama **does not generate weather predictions**. The news index supplies weather-related article excerpts. Forecast and news evidence remain separate.
+**Evidence boundaries:** Open-Meteo supplies the weather measurements; Groq/Ollama **does not generate weather predictions**. The news index supplies article excerpts only. The v0.9 review can reject claims but cannot establish that reporting is true or independently corroborated. Forecast and news evidence remain separate. See [v0.9 workflow and LangSmith guide](docs/LANGGRAPH_LANGSMITH_V09.md).
 
 ## Run on Windows (PowerShell)
 
-**Requirements:** Python 3.11/3.12, internet to install dependencies, network access to news feeds for live mode. No Docker or Node.js is required. Groq is optional; weather forecast retrieval does not require a Groq key. The Open-Meteo free endpoint is intended for non-commercial usage; check its terms before commercial deployment.
+**Requirements:** Python 3.11/3.12, internet to install dependencies, network access to news feeds for live mode. No Docker or Node.js is required. Groq is optional for weather retrieval and evidence indexing but required for Groq-based AI synthesis; v0.9 research requires LangGraph installed. LangSmith tracing is optional and requires its own API key. The Open-Meteo free endpoint is intended for non-commercial usage; check its terms before commercial deployment.
 
 1. Extract the ZIP, for example to `C:\Projects\bharatpulse-ai`.
 2. Open **PowerShell** in that directory (the one containing `requirements.txt`).
@@ -65,10 +66,11 @@ py -3.11 -m venv .venv
 ```
 
 4. Open **http://127.0.0.1:8000** in your browser. It starts in **Live RSS** mode and checks feed freshness automatically. The first fetch may take several seconds. Check the **Last success** indicator. If your network blocks news feeds, switch to **Demo data**.
-5. Choose a state, then choose an **AI response language**. Each selected state is monitored while in use. Open any news card and click **Research** or **Ask AI**.
+5. Choose a state, then choose an **AI response language**. Each selected state is monitored while in use. Open any news card and click **Research** or **Ask AI**. In Research, optionally specify a research angle, then select **Run multi-agent research**. The result displays the six LangGraph stages, approved source-quoted findings (if any), and publication timestamps.
 6. Scroll to **Weather Intelligence** (or click its sidebar link). Select an Indian city to load live model readings and the 7-day forecast. Use the map temperature markers to switch city. The **Weather-related news** panel uses the existing RSS index; **Ask Weather AI** explains the forecast, not unsupported weather predictions.
 7. For regional-language weather explanations, select Hindi or another response language, configure a working Groq/Ollama connection, and ask about the selected city’s upcoming days. The app keeps the English values if the translation cannot be verified.
-8. Stop with `Ctrl+C`. SQLite saves news at `data/news.db`.
+8. **Optional LangSmith:** add `LANGSMITH_TRACING=true`, your **own** `LANGSMITH_API_KEY`, and `LANGSMITH_PROJECT=BharatPulse-v09-Research` to the local `.env`; restart the server, run a real-news Research request, and inspect that project in [LangSmith](https://smith.langchain.com/). This sends prompts, RSS excerpts, user questions and responses to LangSmith; never trace private information without permission. Org-scoped keys may require `LANGSMITH_WORKSPACE_ID`. See [setup guide](docs/LANGGRAPH_LANGSMITH_V09.md).
+9. Stop with `Ctrl+C`. SQLite saves news at `data/news.db`.
 
 **Status/API:** [health](http://127.0.0.1:8000/api/health), [metadata](http://127.0.0.1:8000/api/meta), [Swagger](http://127.0.0.1:8000/docs).
 
@@ -166,8 +168,8 @@ Browser (every 20 sec) ◄── FastAPI news/status + news articles
                          ► regional weather RSS cards with Research / Ask AI
 ```
 
-The v0.8 weather workflow and limitations are in **[docs/WEATHER_V08.md](docs/WEATHER_V08.md)**; Windows upgrade instructions are in **[docs/WINDOWS_UPGRADE_V08.md](docs/WINDOWS_UPGRADE_V08.md)**. The research flow is documented in **[docs/RESEARCH_V2.md](docs/RESEARCH_V2.md)**. The v0.7 chatbot checks and limitations are in **[docs/CHAT_V07.md](docs/CHAT_V07.md)**. Upgrading from your working Windows v0.6 GitHub checkout? Read **[docs/WINDOWS_UPGRADE_V07.md](docs/WINDOWS_UPGRADE_V07.md)**.
+The v0.9 LangGraph/observability implementation is in **[docs/LANGGRAPH_LANGSMITH_V09.md](docs/LANGGRAPH_LANGSMITH_V09.md)**; upgrading from your working v0.8 Windows checkout is covered by **[docs/WINDOWS_UPGRADE_V09.md](docs/WINDOWS_UPGRADE_V09.md)**. The v0.8 weather workflow and limitations are in **[docs/WEATHER_V08.md](docs/WEATHER_V08.md)**; Windows upgrade instructions are in **[docs/WINDOWS_UPGRADE_V08.md](docs/WINDOWS_UPGRADE_V08.md)**. The research flow is documented in **[docs/RESEARCH_V2.md](docs/RESEARCH_V2.md)**. The v0.7 chatbot checks and limitations are in **[docs/CHAT_V07.md](docs/CHAT_V07.md)**. Upgrading from your working Windows v0.6 GitHub checkout? Read **[docs/WINDOWS_UPGRADE_V07.md](docs/WINDOWS_UPGRADE_V07.md)**.
 
-For v0.7 and v0.8, news chat may use 2 model calls for English and up to 4 for other supported languages. This can increase latency and Groq rate-limit usage. The LLM does not independently browse the internet. News text is untrusted input. Do not upload private data or use this MVP for official reporting or consequential decisions without editorial review, permissions and evidence verification.
+For v0.7 chat and v0.9 research, model review may require additional Groq calls; news chat may use 2 model calls for English and up to 4 for other supported languages. This can increase latency and Groq rate-limit usage. The LLM does not independently browse the internet. News text is untrusted input. Do not upload private data or use this MVP for official reporting or consequential decisions without editorial review, permissions and evidence verification.
 
 For a beginner-friendly explanation of both this project and **Globalmove-AI**, see [`docs/BEGINNER_GUIDE.md`](docs/BEGINNER_GUIDE.md). The genuinely production-grade roadmap is in [`docs/NEXT_STAGES.md`](docs/NEXT_STAGES.md).

@@ -102,6 +102,22 @@ async def llm_is_configured() -> bool:
     return False
 
 
+# LangSmith is strictly opt-in through LANGSMITH_TRACING in the local .env.
+# When enabled, traces can include research questions, RSS snippets and model
+# input/output. Never pass GROQ_API_KEY or LANGSMITH_API_KEY as trace metadata.
+try:
+    from langsmith import traceable as _langsmith_traceable
+except ImportError:  # A missing optional SDK must not interrupt non-research routes.
+    _langsmith_traceable = None
+
+
+def _maybe_trace_llm(func):
+    if _langsmith_traceable is None:
+        return func
+    return _langsmith_traceable(name="BharatPulse Groq or Ollama completion", run_type="llm")(func)
+
+
+@_maybe_trace_llm
 async def _complete(messages: list[dict[str, str]], *, json_mode: bool = False,
                     max_tokens: int = 950) -> str:
     """Single LLM adapter for GroqCloud and optional local Ollama.

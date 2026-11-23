@@ -79,3 +79,17 @@
 @media(max-width:650px){.weather-section{padding:30px 20px}.weather-daily{grid-template-columns:repeat(2,minmax(0,1fr))}.weather-ai-form{flex-wrap:wrap}.weather-ai-form .btn{flex:1}}
 
 .weather-news-actions{display:flex;gap:8px;margin-top:8px}.weather-news-actions button{border:1px solid #dce9df;background:#f1f7ef;color:#477047;border-radius:4px;padding:7px 10px;font-size:10px;font-weight:700;cursor:pointer}
+
+/* v0.9: visible multi-agent execution trace and research-angle input. */
+.research-angle{margin:15px 0;border:1px solid #dfe9e4;padding:12px 14px;background:#f8fbf9;border-radius:8px}
+.research-angle label{font-size:11px;font-weight:800;display:block;margin-bottom:8px;color:#2a5840}
+.research-angle label span{font-weight:500;color:#82928a}
+.research-angle textarea{display:block;width:100%;border:1px solid #ceddd6;border-radius:5px;padding:10px 11px;resize:vertical;min-height:56px;max-height:160px;font:12px/1.6 'DM Sans',sans-serif;color:#263f35;background:white}
+.research-angle textarea:focus-visible{outline:3px solid #84b7cb;outline-offset:2px}
+.research-angle p{font-size:10px;line-height:1.6;color:#779084;margin:8px 0 0}
+.agent-trace{list-style:none;margin:12px 0!important;padding:0!important;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.agent-step{display:flex;align-items:flex-start;gap:9px;border:1px solid #dae7df;border-radius:7px;padding:10px 9px!important;background:#fafcfb;min-width:0}
+.agent-step strong{display:block;font-size:11px;color:#2c5643}
+.agent-step small{display:block;font-size:10px;color:#70897d;line-height:1.6;margin-top:2px;overflow-wrap:anywhere}
+.agent-dot{display:inline-block;flex:0 0 8px;height:8px;margin-top:5px;border-radius:50%;background:#a9bac0}
+.agent-dot.ok{background:#78b94c}.agent-dot.warn{background:#dca74b}.agent-dot.skip{background:#a3b8c5}

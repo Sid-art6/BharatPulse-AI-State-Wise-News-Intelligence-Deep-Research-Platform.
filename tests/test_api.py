@@ -113,6 +113,8 @@ def test_watch_on_open_schedules_live_ingestion(monkeypatch, tmp_path):
 
 
 def test_real_article_research_abstains_when_no_followup_evidence(monkeypatch, tmp_path):
+    import pytest
+    pytest.importorskip("langgraph")  # Actual StateGraph; no simulation.
     from app import core
     monkeypatch.setattr(core, "DATA_DIR", tmp_path)
     monkeypatch.setattr(core, "DB_PATH", tmp_path / "test.db")

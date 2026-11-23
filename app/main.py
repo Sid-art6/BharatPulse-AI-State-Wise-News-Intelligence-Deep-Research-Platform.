@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -13,7 +12,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import ai, core, research_v2, chat_v07, weather
+from . import ai, core, research_v2, chat_v07, weather, research_agents_v09
 from .live import monitor
 from .regions import REGIONS, TOPICS, LANGUAGES
 
@@ -29,7 +28,7 @@ async def lifespan(_app: FastAPI):
         await monitor.stop()
 
 
-app = FastAPI(title="BharatPulse AI", description="Source-grounded, state-wise Indian news intelligence", version="0.8.0", lifespan=lifespan)
+app = FastAPI(title="BharatPulse AI", description="Source-grounded, state-wise Indian news intelligence", version="0.9.0", lifespan=lifespan)
 STATIC = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
@@ -53,7 +52,7 @@ def homepage():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "BharatPulse AI", "version": "0.8.0"}
+    return {"status": "ok", "service": "BharatPulse AI", "version": "0.9.0"}
 
 
 @app.get("/api/meta")
@@ -76,7 +75,14 @@ async def meta():
         "ollama_model": ai.OLLAMA_MODEL,
         "limitations": "RSS snippets only; model-based semantic review is not independent fact-checking and cannot guarantee accuracy",
         "chat_workflow": "v0.7: atomic English claims -> exact RSS quote / number check -> semantic review -> verified translation -> cited draft or abstention",
-        "research_workflow": "v2: RSS discovery, relevant excerpts, quoted findings, publication-only timeline",
+        "research_workflow": "v0.9: LangGraph planner -> RSS discovery -> excerpt retrieval -> quoted synthesis -> semantic review -> report / abstention",
+        "research_engine": "LangGraph StateGraph (stateless per request, no cross-user memory)",
+        "langsmith_tracing": (
+            "configured" if (os.getenv("LANGSMITH_TRACING", "false").lower() in {"true", "1", "yes"}
+                             and bool(os.getenv("LANGSMITH_API_KEY", "").strip())
+                             and not os.getenv("LANGSMITH_API_KEY", "").startswith("PASTE_"))
+            else "disabled"
+        ),
         "weather": {"status": "implemented", "provider": "Open-Meteo", "days": 7, "cities": len(weather.CITY_CATALOG), "map": "city point temperatures", "no_unsupported_forecasts": True},
     }
 
@@ -201,15 +207,12 @@ def stats(demo: bool = False):
 
 class ResearchPayload(BaseModel):
     language: str = "English"
+    question: str = Field(default="", max_length=500)
 
 
 @app.post("/api/research/{article_id}")
 async def deep_research(article_id: str, payload: ResearchPayload = ResearchPayload()):
-    """Explicit stages: discovery -> retrieval -> evidence anchoring -> report.
-
-    Uses only RSS metadata; publication dates are NEVER labelled event dates.
-    The structured report is checked for exact quoted evidence before display.
-    """
+    """v0.9 LangGraph multi-stage RSS research, fail-closed on model issues."""
     language = validate_language(payload.language)
     selected = core.get_article(article_id)
     if not selected:
@@ -219,58 +222,17 @@ async def deep_research(article_id: str, payload: ResearchPayload = ResearchPayl
             "article_id": article_id, "demo": True, "generated_by": "demo_notice",
             "answer": ai.no_information_message(language), "sources": [],
             "report": research_v2.initial_report([]),
+            "workflow": {"engine": "LangGraph StateGraph", "version": "0.9", "trace": [],
+                         "review_status": "demo_excluded", "source_count": 0, "approved_findings": 0},
             "caveat": "Illustrative demo content is not real reporting.",
             "stages": ["Demo content excluded from research"],
         }
-
-    # Stage 1: discover related headlines on the known Google RSS origin only.
-    # Article URLs are never fetched by this API: no arbitrary URL requests.
-    short_title = re.sub(r"[^\w\s-]", " ", selected["title"])[:130]
-    extra: list[dict[str, Any]] = []
-    warning: str | None = None
     try:
-        extra = core.parse_rss(await core.fetch_rss(f"{short_title} when:30d"), selected["region"])
-        core.save_articles(extra)
-    except (httpx.HTTPError, ValueError) as exc:
-        warning = f"Follow-up RSS search failed ({type(exc).__name__}); stored reporting only."
-
-    # Stage 2: retrieve relevant snippets from the current news store.
-    from_store = core.list_articles(region="All India", demo=False, limit=100)
-    related = core.find_related(selected, extra + from_store, limit=7)
-    sources = [selected, *related]
-    report = research_v2.initial_report(sources)
-    mode = "insufficient_evidence"
-
-    # Stage 3: request structured model evidence anchors; fail closed.
-    if len(sources) >= 2 and await ai.llm_is_configured():
-        try:
-            report = await research_v2.generate_report(sources, language)
-            mode = ai.active_provider() if report["findings"] else "insufficient_evidence"
-        except (httpx.HTTPError, RuntimeError, ValueError, TypeError):
-            mode = "source_index_llm_unavailable"
-    elif len(sources) >= 2:
-        mode = "source_index_no_llm"
-
-    # Stage 4: always expose a deterministic publication-only timeline.
-    # No claim of independent fact-checking is made.
-    return {
-        "article_id": article_id, "demo": False, "generated_by": mode,
-        "answer": "Anchored research brief available." if report["findings"] else ai.no_information_message(language),
-        "report": report,
-        "sources": [{"index": i, **row} for i, row in enumerate(sources, 1)],
-        "stages": [
-            "Discover: search matching RSS feed metadata",
-            f"Retrieve: {len(sources)} related headlines or excerpts",
-            "Evidence check: exact-source quotes and numeric/citation screening",
-            "Report: structured findings and publication-only timeline",
-        ],
-        "caveat": (
-            "This is an RSS-level research brief, not full-article research. "
-            "Quoted excerpts and matching keywords do not establish factual truth, independent confirmation, "
-            "or semantic correctness. Human review of publisher articles is essential."
-        ),
-        "warning": warning,
-    }
+        return await research_agents_v09.run_research(selected, language, payload.question)
+    except RuntimeError as exc:
+        # Includes LangGraph dependency not installed; never leak raw provider
+        # or RSS response strings and never invent research claims.
+        raise HTTPException(status_code=503, detail="Research workflow is unavailable. Install requirements and check the server logs.") from exc
 
 
 def evidence_fallback(sources: list[dict[str, Any]], language: str = "English") -> str:

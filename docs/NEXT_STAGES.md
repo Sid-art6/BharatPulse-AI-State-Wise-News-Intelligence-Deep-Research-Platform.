@@ -15,7 +15,7 @@ Do not claim any of these stages are currently implemented.
 - Isolate untrusted documents against prompt injection and test adversarial prompts.
 
 ## Stage 4 — Agent workflow and investigations
-- Introduce LangGraph nodes for search planning, source collection, evidence verification, contradiction detection, synthesis and human approval.
+- Extend the v0.9 LangGraph pipeline with contradiction detection, human approval gates, durable checkpoints and deeper retrieval (not yet implemented).
 - Track decisions/retries/checkpoints; never infer independent corroboration from syndicated copies.
 - Expand the v0.6 structured quote-anchored RSS report into semantic claim-evidence checking with reviewer sign-off, contradiction labels and report export.
 

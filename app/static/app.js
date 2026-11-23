@@ -98,6 +98,7 @@ function openDrawer(id,which){
   const a=state.articles.find(item=>item.id===id);
   if(!a)return;
   state.selected=a;state.research=null;
+  $('researchQuestion').value='';
   $('drawerBackdrop').hidden=false;$('drawer').hidden=false;document.body.style.overflow='hidden';
   $('drawerTitle').textContent=a.title;
   $('drawerSub').textContent=`${a.publisher} · ${a.region} · Original language: ${a.language||'Unknown'} · Responses: ${state.language} · ${relativeDate(a.published_at)}`;
@@ -130,9 +131,14 @@ function renderResearchReport(data){
   const limitations = (report.not_verified||[]).map(item=>`<li>${escapeHTML(item)}</li>`).join('');
   const questions = (report.open_questions||[]).map(item=>`<li>${escapeHTML(item)}</li>`).join('');
   const badge = ['groq','ollama'].includes(data.generated_by) ? `AI DRAFT · ${escapeHTML(data.generated_by.toUpperCase())} · EXCERPT-ANCHORED` : 'EVIDENCE INDEX · NO APPROVED AI FINDINGS';
-  const dropNote = Number(report.rejected_claims||0)>0 ? `<p class="research-muted">${Number(report.rejected_claims)} model claim(s) excluded because their quoted evidence or numeric details did not pass the automated checks.</p>` : '';
+  const dropNote = Number(report.rejected_claims||0)>0 ? `<p class="research-muted">${Number(report.rejected_claims)} draft claim(s) excluded by quotation, numeric or semantic review checks.</p>` : '';
+  const workflow = data.workflow || {};
+  const nodes = (Array.isArray(workflow.trace) ? workflow.trace : []).map(step =>
+    `<li class="agent-step"><span class="agent-dot ${step.status==='completed'?'ok':step.status==='degraded'?'warn':'skip'}"></span><div><strong>${escapeHTML(step.agent)}</strong><small>${escapeHTML(step.status)} · ${escapeHTML(step.detail)}</small></div></li>`).join('');
+  const agentTrace = nodes ? `<div class="report-section"><h3>LangGraph agent execution trace</h3><p class="research-muted">${escapeHTML(workflow.engine||'')} · ${Number(workflow.source_count||0)} indexed sources · review: ${escapeHTML(workflow.review_status||'not_run')}</p><ol class="agent-trace">${nodes}</ol></div>` : '';
+
   return `<div class="research-badge">${badge}</div>
-    <div class="report-section"><h3>What available sources report</h3>${findings}${dropNote}</div>
+    ${agentTrace}<div class="report-section"><h3>What available sources report</h3>${findings}${dropNote}</div>
     <div class="report-section"><h3>Publication timeline (UTC)</h3><p class="research-muted">These are reported feed publication timestamps, <strong>not the dates or times of the underlying events.</strong></p><ol>${timeline}</ol></div>
     <div class="report-section"><h3>What is not verified</h3><ul>${limitations}</ul></div>
     <div class="report-section"><h3>Questions for further reporting</h3><ul>${questions}</ul></div>
@@ -142,9 +148,9 @@ async function runResearch(){
   if(!state.selected)return;
   $('researchRun').disabled=true;
   $('researchOutput').classList.remove('report-structured');
-  $('researchOutput').textContent='Discovering related RSS coverage, checking excerpt quotations, and building a structured report…';
+  $('researchOutput').textContent='Running LangGraph: planning, RSS discovery, retrieval, source-quoted synthesis and semantic review…';
   try{
-    const result=await request(`/api/research/${encodeURIComponent(state.selected.id)}`,{method:'POST',body:JSON.stringify({language:state.language})});
+    const result=await request(`/api/research/${encodeURIComponent(state.selected.id)}`,{method:'POST',body:JSON.stringify({language:state.language,question:$('researchQuestion').value.trim()})});
     $('sourceList').innerHTML=renderSources(result.sources);
     $('researchOutput').classList.add('report-structured');
     $('researchOutput').innerHTML=renderResearchReport(result);

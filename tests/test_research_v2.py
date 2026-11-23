@@ -71,6 +71,8 @@ def test_bad_llm_json_cannot_be_displayed_as_factual_research():
 
 
 def test_research_endpoint_uses_structured_evidence_and_safe_fallback(monkeypatch, tmp_path):
+    import pytest
+    pytest.importorskip("langgraph")  # Actual StateGraph integration.
     monkeypatch.setattr(core, 'DATA_DIR', tmp_path)
     monkeypatch.setattr(core, 'DB_PATH', tmp_path / 'test.db')
     monkeypatch.setattr(ai, 'LLM_PROVIDER', 'groq')
@@ -144,6 +146,8 @@ def test_native_language_quote_is_matched_without_forcing_english_tokens():
 
 
 def test_end_to_end_structured_groq_answer_uses_literal_quote(monkeypatch, tmp_path):
+    import pytest
+    pytest.importorskip("langgraph")  # Actual StateGraph integration.
     monkeypatch.setattr(core, 'DATA_DIR', tmp_path)
     monkeypatch.setattr(core, 'DB_PATH', tmp_path / 'news.db')
     monkeypatch.setattr(ai, 'LLM_PROVIDER', 'groq')
@@ -158,6 +162,8 @@ def test_end_to_end_structured_groq_answer_uses_literal_quote(monkeypatch, tmp_p
 
     async def mock_complete(messages, *, json_mode, max_tokens):
         assert json_mode is True
+        if 'INPUT:' in messages[-1]['content']:
+            return json.dumps({'decisions': [{'id': 1, 'supported': True}]})
         assert 'SOURCE DATA' in messages[-1]['content']
         assert 'English' in messages[-1]['content']
         return json.dumps({'findings': [{

@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.9 — LangGraph Deep Research and opt-in LangSmith tracing (Windows integration candidate)
+
+- Added **real LangGraph StateGraph** orchestration with planning, RSS discovery, stored-source retrieval, model-based synthesis, semantic quality review, and report assembly; conditional branch to abstention/source index without LLM.
+- Added an optional research question/angle and an inspectable stage timeline in the existing Research drawer.
+- Preserved exact source-quote, citation index, number checks, separate semantic review, publication-only timeline and controlled abstentions.
+- Added **LangSmith opt-in observability** using standard `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, and `LANGSMITH_PROJECT`; model completions can appear as child traces. Local `.env` is never bundled or committed.
+- Added mocked offline tests for rejection, fallback and conditional routing; **real LangGraph and LangSmith integration on Windows remains to be verified**.
+- No Node.js, Docker, vector database, full-text scraping or automated independent fact-checking.
+
+
 ## v0.8 — Weather Intelligence (local test candidate)
 
 - Weather map sync improvement: selecting any supported city automatically centres and highlights its map location; clicking map markers updates the selected city and forecast. Selection remains visible even for cities outside the initial 12 temperature markers.

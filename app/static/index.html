@@ -22,7 +22,7 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="pipeline-card"><div class="mini-label">PIPELINE STATUS <i class="status-dot"></i></div><strong>RSS → Analyse → Explore</strong><p>RSS sources: Google News, regional discovery and BBC India. X and Google Trends are not connected in this MVP.</p></div>
-        <div class="side-foot">LOCAL WORKSPACE <span>v0.8</span></div>
+        <div class="side-foot">LOCAL WORKSPACE <span>v0.9</span></div>
       </div>
     </aside>
 
@@ -73,9 +73,9 @@
   <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
   <section class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Article intelligence" hidden>
     <div class="drawer-header"><span class="drawer-kicker" id="drawerKicker">INTELLIGENCE DESK</span><button class="icon-btn" id="drawerClose" aria-label="Close panel">✕</button></div>
-    <div class="drawer-scroll"><div class="drawer-topic" id="drawerTopic">RESEARCH REPORT</div><h2 id="drawerTitle">Article title</h2><p class="drawer-sub" id="drawerSub"></p><div class="drawer-tabs"><button id="researchTab" class="drawer-tab active">Deep research</button><button id="chatTab" class="drawer-tab">Ask AI</button></div><div id="researchPanel"><div class="result-box" id="researchOutput">Select “Start research” to build an excerpt-grounded brief with a publication-only timeline.</div><button class="btn btn-primary run-btn" id="researchRun">Build research brief <span>↗</span></button><div id="sourceList"></div></div><div id="chatPanel" hidden><div id="chatMessages" class="chat-messages"><div class="assistant-bubble">Ask a question about this headline. Answers will only use available RSS metadata; a configured Groq or Ollama model is required for AI-generated explanations.</div></div><form id="chatForm" class="chat-form"><input id="chatInput" placeholder="What do these sources tell us?" minlength="2" maxlength="1200" required /><button aria-label="Send question" type="submit">↗</button></form><div class="chat-disclaimer">AI can be inaccurate. Verify against linked reporting.</div></div></div>
+    <div class="drawer-scroll"><div class="drawer-topic" id="drawerTopic">RESEARCH REPORT</div><h2 id="drawerTitle">Article title</h2><p class="drawer-sub" id="drawerSub"></p><div class="drawer-tabs"><button id="researchTab" class="drawer-tab active">Deep research</button><button id="chatTab" class="drawer-tab">Ask AI</button></div><div id="researchPanel"><div class="research-angle"><label for="researchQuestion">Research angle <span>(optional)</span></label><textarea id="researchQuestion" maxlength="500" rows="2" placeholder="Example: What is actually confirmed about this announcement?"></textarea><p>LangGraph researches the selected headline against indexed RSS excerpts. Your question guides the brief; it does not count as evidence.</p></div><div class="result-box" id="researchOutput">Select “Start research” to run the LangGraph evidence workflow and build a source-grounded report.</div><button class="btn btn-primary run-btn" id="researchRun">Run multi-agent research <span>↗</span></button><div id="sourceList"></div></div><div id="chatPanel" hidden><div id="chatMessages" class="chat-messages"><div class="assistant-bubble">Ask a question about this headline. Answers will only use available RSS metadata; a configured Groq or Ollama model is required for AI-generated explanations.</div></div><form id="chatForm" class="chat-form"><input id="chatInput" placeholder="What do these sources tell us?" minlength="2" maxlength="1200" required /><button aria-label="Send question" type="submit">↗</button></form><div class="chat-disclaimer">AI can be inaccurate. Verify against linked reporting.</div></div></div>
   </section>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
-  <script src="/static/app.js?v=0.8-map-sync-1" defer></script>
+  <script src="/static/app.js?v=0.9-langgraph-1" defer></script>
 </body>
 </html>
