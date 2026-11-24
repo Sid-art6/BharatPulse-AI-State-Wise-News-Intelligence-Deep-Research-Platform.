@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.10 — Regional RSS discovery and evidence quality (Windows test candidate)
+
+- Added **29 curated publisher-hosted RSS sections (25 Indian Express, 4 The Hindu)**: direct publisher-hosted news metadata alongside Google News discovery, with a fixed allowlist and up to two extra requests per watched region where supported.
+- Added partial-feed failure tolerance, section-based location classification at lower confidence and `feed_origin` persistence/migration for existing SQLite databases.
+- Added conservative source-diversity-aware ranking of related RSS sources; near-identical headlines are deprioritised, not assumed copied or independently corroborated.
+- Added deterministic research coverage signals: number of distinct publisher **labels**, possible similar-headline groups, and exact numerical expressions from headline/excerpt data with source indices.
+- Updated research UI and source cards to show origin and evidence comparison, always labelled as unverified metadata.
+- Retained the v0.9 real LangGraph graph, Groq, v0.8 weather/map, and v0.7 multilingual chat. LangSmith is optional and off by default.
+- Added offline regression tests; real LangGraph package and live direct-feed access must be verified on user's Windows laptop before pushing.
+- **Important:** Publisher feeds are not licensed full-article APIs. Review attribution, feed terms, rate limits and commercial redistribution rights before external use.
+
 ## v0.9 — LangGraph Deep Research and opt-in LangSmith tracing (Windows integration candidate)
 
 - Added **real LangGraph StateGraph** orchestration with planning, RSS discovery, stored-source retrieval, model-based synthesis, semantic quality review, and report assembly; conditional branch to abstention/source index without LLM.

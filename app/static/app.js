@@ -36,8 +36,10 @@ function createArticleCard(a){
   const lang = a.language || 'Unknown';
   const desc = (state.demo ? a.description : (a.summary_en || a.description)) || 'No excerpt supplied by this feed. Inspect the publisher link for details.';
   const excerptLabel = state.demo ? 'ILLUSTRATIVE SCENARIO' : hasEnglishPreview ? (lang==='English' ? 'RSS EXCERPT · ENGLISH' : 'ENGLISH PREVIEW · AI TRANSLATION') : `ORIGINAL ${lang.toUpperCase()} EXCERPT · NO ENGLISH PREVIEW`;
+  const provenance = a.is_demo ? '' : a.feed_origin==='direct_publisher_rss' ? ' · Direct publisher RSS' :
+    a.feed_origin==='google_news_rss' ? ' · Google News RSS' : a.feed_origin==='bbc_publisher_rss' ? ' · BBC RSS' : '';
   const read = allowedLink(a.url)?`<a href="${escapeHTML(a.url)}" target="_blank" rel="noopener noreferrer">Source ↗</a>`:'';
-  return `<article class="news-card"><div class="card-top"><span class="category">${escapeHTML(a.topic)}</span><span class="card-age">${escapeHTML(relativeDate(a.published_at))}</span></div><h3>${escapeHTML(a.title)}</h3><div class="excerpt-label">${escapeHTML(excerptLabel)}</div><p>${escapeHTML(desc)}</p><div class="card-footer"><div class="card-source"><span class="source-pin"></span>${escapeHTML(a.region)} <span>·</span> ${escapeHTML(source)}</div><div class="card-actions"><button type="button" data-research="${escapeHTML(a.id)}">Research ↗</button><button type="button" data-chat="${escapeHTML(a.id)}">Ask AI ↗</button>${read}</div></div></article>`;
+  return `<article class="news-card"><div class="card-top"><span class="category">${escapeHTML(a.topic)}</span><span class="card-age">${escapeHTML(relativeDate(a.published_at))}</span></div><h3>${escapeHTML(a.title)}</h3><div class="excerpt-label">${escapeHTML(excerptLabel)}</div><p>${escapeHTML(desc)}</p><div class="card-footer"><div class="card-source"><span class="source-pin"></span>${escapeHTML(a.region)} <span>·</span> ${escapeHTML(source)}${escapeHTML(provenance)}</div><div class="card-actions"><button type="button" data-research="${escapeHTML(a.id)}">Research ↗</button><button type="button" data-chat="${escapeHTML(a.id)}">Ask AI ↗</button>${read}</div></div></article>`;
 }
 function updateStats(stats){
   $('statStories').textContent=Number(stats.total_articles||0).toLocaleString('en-IN');
@@ -117,7 +119,7 @@ function selectDrawerTab(which){
 }
 function renderSources(sources){
   if(!sources?.length)return '<p class="drawer-sub">No additional live sources were available for verification.</p>';
-  return `<div class="source-heading">EVIDENCE SOURCES / ${sources.length}</div>${sources.map(s=>`<article class="source-row" id="evidence-src-${Number(s.index)}"><strong>[${s.index}] ${escapeHTML(s.title)}</strong><p>${escapeHTML(s.publisher)} · ${escapeHTML(s.region)} · ${escapeHTML(relativeDate(s.published_at))}</p>${allowedLink(s.url)?`<a href="${escapeHTML(s.url)}" target="_blank" rel="noopener noreferrer">Inspect publisher/source ↗</a>`:'Demo source — no external link'}</article>`).join('')}`;
+  return `<div class="source-heading">EVIDENCE SOURCES / ${sources.length}</div>${sources.map(s=>`<article class="source-row" id="evidence-src-${Number(s.index)}"><strong>[${s.index}] ${escapeHTML(s.title)}</strong><p>${escapeHTML(s.publisher)} · ${escapeHTML(s.region)} · ${escapeHTML(relativeDate(s.published_at))} · ${escapeHTML(s.feed_origin==='direct_publisher_rss'?'Direct publisher RSS':s.feed_origin==='google_news_rss'?'Google News RSS':s.feed_origin==='bbc_publisher_rss'?'BBC RSS':'Feed origin unclassified')}</p>${allowedLink(s.url)?`<a href="${escapeHTML(s.url)}" target="_blank" rel="noopener noreferrer">Inspect publisher/source ↗</a>`:'Demo source — no external link'}</article>`).join('')}`;
 }
 function renderResearchReport(data){
   const report = data.report || {};
@@ -136,9 +138,23 @@ function renderResearchReport(data){
   const nodes = (Array.isArray(workflow.trace) ? workflow.trace : []).map(step =>
     `<li class="agent-step"><span class="agent-dot ${step.status==='completed'?'ok':step.status==='degraded'?'warn':'skip'}"></span><div><strong>${escapeHTML(step.agent)}</strong><small>${escapeHTML(step.status)} · ${escapeHTML(step.detail)}</small></div></li>`).join('');
   const agentTrace = nodes ? `<div class="report-section"><h3>LangGraph agent execution trace</h3><p class="research-muted">${escapeHTML(workflow.engine||'')} · ${Number(workflow.source_count||0)} indexed sources · review: ${escapeHTML(workflow.review_status||'not_run')}</p><ol class="agent-trace">${nodes}</ol></div>` : '';
+  // Literal RSS metadata signals; amounts and similar titles are not fact checks.
+  const coverage=report.coverage||{};
+  const headlineGroups=(coverage.headline_overlap_groups||[]).map(group=>
+    `<li>Sources ${group.sources.map(n=>`<a href="#evidence-src-${Number(n)}">[${Number(n)}]</a>`).join(', ')}: similar wording; possible repeated reporting, not proven syndication.</li>`).join('');
+  const amounts=(coverage.reported_numbers||[]).map(entry=>
+    `<li><a href="#evidence-src-${Number(entry.source)}">[${Number(entry.source)}]</a> <strong>${escapeHTML(entry.value)}</strong> <span>— ${escapeHTML(entry.context)}</span></li>`).join('');
+  const coveragePanel=(coverage.source_count!==undefined) ? `<div class="report-section coverage-panel">
+    <h3>Coverage and numerical claims · RSS metadata only</h3>
+    <p class="research-muted">${Number(coverage.source_count||0)} indexed entries · ${Number(coverage.publisher_label_count||0)} publisher labels. Distinct labels do not prove independent reporting.</p>
+    <h4>Possible headline overlap</h4>${headlineGroups?`<ul>${headlineGroups}</ul>`:'<p class="research-muted">No strong headline overlap found in this limited evidence set; syndication remains possible.</p>'}
+    <h4>Numerical details appearing in sources</h4>${amounts?`<ul class="quantity-list">${amounts}</ul>`:'<p class="research-muted">No qualifying numeric amounts in the indexed RSS text.</p>'}
+    <p class="research-muted">Amounts are quoted from RSS text and have not been verified or reconciled against primary documents.</p>
+  </div>` : '';
+
 
   return `<div class="research-badge">${badge}</div>
-    ${agentTrace}<div class="report-section"><h3>What available sources report</h3>${findings}${dropNote}</div>
+    ${agentTrace}${coveragePanel}<div class="report-section"><h3>What available sources report</h3>${findings}${dropNote}</div>
     <div class="report-section"><h3>Publication timeline (UTC)</h3><p class="research-muted">These are reported feed publication timestamps, <strong>not the dates or times of the underlying events.</strong></p><ol>${timeline}</ol></div>
     <div class="report-section"><h3>What is not verified</h3><ul>${limitations}</ul></div>
     <div class="report-section"><h3>Questions for further reporting</h3><ul>${questions}</ul></div>

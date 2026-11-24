@@ -93,3 +93,11 @@
 .agent-step small{display:block;font-size:10px;color:#70897d;line-height:1.6;margin-top:2px;overflow-wrap:anywhere}
 .agent-dot{display:inline-block;flex:0 0 8px;height:8px;margin-top:5px;border-radius:50%;background:#a9bac0}
 .agent-dot.ok{background:#78b94c}.agent-dot.warn{background:#dca74b}.agent-dot.skip{background:#a3b8c5}
+
+/* v0.10: distinct RSS provenance + restrained evidence comparison block */
+.coverage-panel{border:1px solid #dce7df;border-radius:8px;background:#fbfdfb;padding:16px!important}
+.coverage-panel h4{font:700 12px/1.5 'DM Sans',sans-serif;color:#2e5843;margin:14px 0 5px}
+.coverage-panel ul{padding-left:18px!important;margin:7px 0!important}
+.coverage-panel li{line-height:1.65;font-size:12px;margin-bottom:5px;overflow-wrap:anywhere}
+.coverage-panel .quantity-list{max-height:250px;overflow-y:auto;padding-right:7px}
+.coverage-panel .quantity-list span{color:#64776b}

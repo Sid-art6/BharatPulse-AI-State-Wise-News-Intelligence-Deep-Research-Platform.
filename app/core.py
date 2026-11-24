@@ -23,6 +23,8 @@ from urllib.parse import quote
 import httpx
 
 from .regions import REGIONS, TOPICS, REGION_RSS_LANG, REGION_LOCAL_ALIASES, classify_topic, infer_region, detect_language
+from .regional_sources_v10 import feeds_for_region
+from .coverage_v10 import headline_overlap, title_tokens
 
 BASE = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.getenv("BHARATPULSE_DATA_DIR", str(BASE / "data")))
@@ -109,6 +111,7 @@ def init_db() -> None:
             created_at TEXT NOT NULL,
             language TEXT NOT NULL DEFAULT 'Unknown',
             summary_en TEXT NOT NULL DEFAULT '',
+            feed_origin TEXT NOT NULL DEFAULT 'unclassified_legacy',
             UNIQUE(fingerprint, is_demo)
         );
         CREATE INDEX IF NOT EXISTS idx_article_region ON articles(region, is_demo, published_at);
@@ -132,6 +135,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE articles ADD COLUMN language TEXT NOT NULL DEFAULT 'Unknown'")
         if "summary_en" not in existing:
             conn.execute("ALTER TABLE articles ADD COLUMN summary_en TEXT NOT NULL DEFAULT ''")
+        if "feed_origin" not in existing:
+            conn.execute("ALTER TABLE articles ADD COLUMN feed_origin TEXT NOT NULL DEFAULT 'unclassified_legacy'")
 
 
 def get_refresh_state(region: str) -> dict[str, Any]:
@@ -162,7 +167,8 @@ def record_refresh_error(region: str, error: str) -> None:
         conn.execute("UPDATE refresh_state SET last_error=? WHERE region=?", (error[:200], region))
 
 
-def parse_rss(xml_bytes: bytes, region: str, provider: str = "Google News") -> list[dict[str, Any]]:
+def parse_rss(xml_bytes: bytes, region: str, provider: str = "Google News", *,
+              section_region: str | None = None) -> list[dict[str, Any]]:
     if len(xml_bytes) > MAX_RESPONSE_BYTES:
         raise ValueError("RSS response too large")
     try:
@@ -177,13 +183,21 @@ def parse_rss(xml_bytes: bytes, region: str, provider: str = "Google News") -> l
         if not title or not url.startswith("https://"):
             continue
         source = item.find("source")
-        publisher = (source.text or "").strip() if source is not None and source.text else ("BBC News" if provider == "BBC News" else "News publisher via Google News")
+        direct_publisher = provider not in {"Google News", "Google News (regional)", "BBC News"}
+        publisher = (provider if direct_publisher else
+                     (source.text or "").strip() if source is not None and source.text else
+                     ("BBC News" if provider == "BBC News" else "News publisher via Google News"))
         if publisher == "News publisher via Google News" and " - " in title:
             publisher = title.rsplit(" - ", 1)[-1][:100]
         if title.endswith(" - " + publisher):
             title = title[: -len(" - " + publisher)]
         description = strip_html(item.findtext("description", default=""))
         article_region, region_confidence = infer_region(title + " " + description, region)
+        # A publisher's explicitly named state/city section is useful but
+        # weaker evidence than an article explicitly mentioning a state.
+        # Never override a different explicitly detected location.
+        if section_region and section_region != "All India" and region_confidence == "not_verified":
+            article_region, region_confidence = section_region, "publisher_section"
         language = detect_language(title + " " + description, article_region)
         result.append({
             "id": stable_id(url), "fingerprint": fingerprint(title), "title": title,
@@ -194,6 +208,8 @@ def parse_rss(xml_bytes: bytes, region: str, provider: str = "Google News") -> l
             "topic": classify_topic(title + " " + description),
             "is_demo": 0, "created_at": utcnow(), "language": language,
             "summary_en": description if language == "English" else "",
+            "feed_origin": "direct_publisher_rss" if direct_publisher else (
+                "bbc_publisher_rss" if provider == "BBC News" else "google_news_rss"),
         })
     return result
 
@@ -234,6 +250,11 @@ async def fetch_news(region: str) -> list[dict[str, Any]]:
         sources.append(("Google News (regional)", fetch_rss(local_query, local_language)))
     if region == "All India":
         sources.append(("BBC News", _fetch_fixed_rss(BBC_INDIA_RSS)))
+    # Up to two fixed direct publisher RSS feeds per watched region, when
+    # available. Never accept a user-supplied arbitrary fetch URL.
+    direct_feeds = feeds_for_region(region)
+    for spec in direct_feeds:
+        sources.append((spec.name, _fetch_fixed_rss(spec.url)))
     results = await asyncio.gather(*(work for _, work in sources), return_exceptions=True)
     news: list[dict[str, Any]] = []
     errors: list[Exception] = []
@@ -242,7 +263,8 @@ async def fetch_news(region: str) -> list[dict[str, Any]]:
             errors.append(result)
             continue
         try:
-            news.extend(parse_rss(result, region, provider=provider))
+            section = next((spec.section_region for spec in direct_feeds if spec.name == provider), None)
+            news.extend(parse_rss(result, region, provider=provider, section_region=section))
         except ValueError as exc:
             errors.append(exc)
     if not news and errors:
@@ -253,7 +275,7 @@ async def fetch_news(region: str) -> list[dict[str, Any]]:
 def save_articles(articles: list[dict[str, Any]]) -> int:
     if not articles:
         return 0
-    columns = ("id", "fingerprint", "title", "description", "url", "publisher", "published_at", "region", "region_confidence", "topic", "is_demo", "created_at", "language", "summary_en")
+    columns = ("id", "fingerprint", "title", "description", "url", "publisher", "published_at", "region", "region_confidence", "topic", "is_demo", "created_at", "language", "summary_en", "feed_origin")
     added = 0
     with db_conn() as conn:
         for a in articles:
@@ -396,7 +418,7 @@ def demo_fixtures() -> list[dict[str, Any]]:
             "url": "", "publisher": "Illustrative fixture (not a news source)",
             "published_at": (now - timedelta(hours=idx * 2)).isoformat(timespec="seconds"),
             "region": region, "region_confidence": "demo_only", "topic": topic,
-            "is_demo": 1, "created_at": utcnow(), "language": "English", "summary_en": description,
+            "is_demo": 1, "created_at": utcnow(), "language": "English", "summary_en": description, "feed_origin": "demo_fixture",
         })
     return rows
 
@@ -409,20 +431,56 @@ def relevance_score(query: str, text: str) -> float:
 
 
 def find_related(article: dict[str, Any], candidate_articles: list[dict[str, Any]], limit: int = 8) -> list[dict[str, Any]]:
-    results = []
-    for other in candidate_articles:
-        if other["id"] == article["id"] or other.get("is_demo"):
+    """Relevant RSS metadata with a modest publisher-diversity preference.
+
+    Near-duplicate headlines are deprioritised rather than assumed fake or
+    independently corroborated. Numeric values and publisher claims are not
+    independently checked by this retrieval function.
+    """
+    selected_tokens = title_tokens(article.get("title", ""))
+    geographic_tokens = {token for region in REGIONS for token in title_tokens(region)}
+    weak_only_tokens = geographic_tokens | {
+        "news", "update", "report", "reports", "reported", "officials",
+        "panel", "committee", "meeting", "government", "minister", "state",
+        "court", "says", "said", "latest", "announces", "announced",
+    }
+    matches: list[tuple[float, dict[str, Any]]] = []
+    seen_ids = {article.get("id")}
+    seen_fingerprints = {article.get("fingerprint")}
+    for candidate in candidate_articles:
+        if candidate.get("id") in seen_ids or candidate.get("is_demo"):
             continue
-        score = relevance_score(article["title"], other["title"] + " " + other["description"])
-        if score >= 0.17:
-            results.append((score, other))
-    results.sort(key=lambda p: (p[0], p[1]["published_at"]), reverse=True)
-    seen = {article["fingerprint"]}
-    unique = []
-    for score, candidate in results:
-        if candidate["fingerprint"] not in seen:
-            seen.add(candidate["fingerprint"])
-            unique.append({**candidate, "relevance": round(score, 2)})
-        if len(unique) >= limit:
-            break
-    return unique
+        fp = candidate.get("fingerprint")
+        if fp and fp in seen_fingerprints:
+            continue
+        seen_ids.add(candidate.get("id"))
+        if fp:
+            seen_fingerprints.add(fp)
+        shared_title_tokens = selected_tokens & title_tokens(candidate.get("title", ""))
+        # A single topical word (e.g. "fuel") can link paraphrased reports.
+        # A shared place name or generic news word alone is not enough: that
+        # would make unrelated regional headlines appear to corroborate each other.
+        if selected_tokens and not (shared_title_tokens - weak_only_tokens):
+            continue
+        relevance = relevance_score(article["title"], candidate.get("title", "") + " " + candidate.get("description", ""))
+        if relevance < 0.17:
+            continue
+        score = .75 * relevance + .25 * headline_overlap(article["title"], candidate.get("title", ""))
+        matches.append((score, candidate))
+    selected: list[dict[str, Any]] = []
+    seen_publishers = {str(article.get("publisher") or "").casefold()}
+    while matches and len(selected) < limit:
+        def adjusted(row):
+            score, candidate = row
+            publisher = str(candidate.get("publisher") or "").casefold()
+            repeated = .10 if publisher in seen_publishers else 0
+            duplicate_wording = .09 if any(
+                headline_overlap(candidate.get("title", ""), chosen["title"]) >= .85
+                for chosen in selected) else 0
+            return (score - repeated - duplicate_wording, candidate.get("published_at", ""))
+        best = max(matches, key=adjusted)
+        matches.remove(best)
+        score, candidate = best
+        seen_publishers.add(str(candidate.get("publisher") or "").casefold())
+        selected.append({**candidate, "relevance": round(score, 2)})
+    return selected

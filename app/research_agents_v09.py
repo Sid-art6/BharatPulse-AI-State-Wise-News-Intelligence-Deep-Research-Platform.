@@ -226,9 +226,9 @@ async def run_research(selected: dict[str, Any], language: str = "English", ques
         _graph = build_graph()
     state = await _graph.ainvoke(
         {"selected": selected, "language": language, "question": question.strip()[:500], "trace": []},
-        config={"run_name": "BharatPulse v0.9 Deep Research",
-                "tags": ["bharatpulse", "research", "v0.9", "rss-evidence"],
-                "metadata": {"workflow_version": "0.9", "response_language": language}},
+        config={"run_name": "BharatPulse v0.10 Deep Research",
+                "tags": ["bharatpulse", "research", "v0.10", "rss-evidence"],
+                "metadata": {"workflow_version": "0.10", "response_language": language}},
     )
     sources = state["sources"]
     report = state["report"]
@@ -239,7 +239,7 @@ async def run_research(selected: dict[str, Any], language: str = "English", ques
         "report": report,
         "sources": [{"index": i, **row} for i, row in enumerate(sources, 1)],
         "stages": [f"{row['agent']}: {row['detail']}" for row in state["trace"]],
-        "workflow": {"engine": "LangGraph StateGraph", "version": "0.9", "trace": state["trace"],
+        "workflow": {"engine": "LangGraph StateGraph", "version": "0.10", "trace": state["trace"],
                      "review_status": state.get("review_status", "not_run"),
                      "source_count": len(sources), "approved_findings": len(report["findings"])},
         "caveat": ("This is an RSS-level research brief, not full-article research. "

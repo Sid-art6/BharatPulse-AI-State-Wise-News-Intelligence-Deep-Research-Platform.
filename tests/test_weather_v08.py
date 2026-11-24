@@ -76,7 +76,7 @@ def test_weather_endpoints_offline(monkeypatch, tmp_path):
     monkeypatch.setattr(weather, "fetch_forecast", fake_forecast)
     monkeypatch.setattr(weather, "fetch_map_weather", fake_map)
     with TestClient(app) as client:
-        assert client.get("/api/health").json()["version"] == "0.9.0"
+        assert client.get("/api/health").json()["version"] == "0.10.0"
         assert client.get("/api/weather/cities").json()["items"]
         result = client.get("/api/weather/forecast", params={"city": "Bengaluru"})
         assert result.status_code == 200 and len(result.json()["daily"]) == 7

@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import ai, core, research_v2, chat_v07, weather, research_agents_v09
+from .regional_sources_v10 import REGION_FEEDS, HINDU_FEEDS
 from .live import monitor
 from .regions import REGIONS, TOPICS, LANGUAGES
 
@@ -28,7 +29,7 @@ async def lifespan(_app: FastAPI):
         await monitor.stop()
 
 
-app = FastAPI(title="BharatPulse AI", description="Source-grounded, state-wise Indian news intelligence", version="0.9.0", lifespan=lifespan)
+app = FastAPI(title="BharatPulse AI", description="Source-grounded, state-wise Indian news intelligence", version="0.10.0", lifespan=lifespan)
 STATIC = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
@@ -52,7 +53,7 @@ def homepage():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "BharatPulse AI", "version": "0.9.0"}
+    return {"status": "ok", "service": "BharatPulse AI", "version": "0.10.0"}
 
 
 @app.get("/api/meta")
@@ -62,7 +63,10 @@ async def meta():
         "topics": TOPICS,
         "response_languages": list(LANGUAGES),
         "default_response_language": "English",
-        "providers": {"google_news_rss": "implemented", "bbc_news_india_rss": "implemented_national", "x_api": "not_implemented", "google_trends": "not_implemented"},
+        "providers": {"google_news_rss": "implemented", "bbc_news_india_rss": "implemented_national", "indian_express_direct_rss": "implemented_curated_sections", "the_hindu_direct_rss": "implemented_selected_sections", "x_api": "not_implemented", "google_trends": "not_implemented"},
+        "direct_publisher_feed_sections": len(REGION_FEEDS) + len(HINDU_FEEDS),
+        "direct_publisher_feed_regions": len(REGION_FEEDS),
+        "source_provenance": "feed_origin stored; RSS section affiliation is not independent confirmation",
         "auto_refresh_seconds": monitor.poll_seconds,
         "refresh_on_open": "check immediately; fetch when due (at most once per region per 5-minute window)",
         "multilingual": "regional RSS discovery; heuristic language detection; English excerpts are translated by selected LLM when configured",
@@ -75,7 +79,7 @@ async def meta():
         "ollama_model": ai.OLLAMA_MODEL,
         "limitations": "RSS snippets only; model-based semantic review is not independent fact-checking and cannot guarantee accuracy",
         "chat_workflow": "v0.7: atomic English claims -> exact RSS quote / number check -> semantic review -> verified translation -> cited draft or abstention",
-        "research_workflow": "v0.9: LangGraph planner -> RSS discovery -> excerpt retrieval -> quoted synthesis -> semantic review -> report / abstention",
+        "research_workflow": "v0.10: LangGraph planning -> RSS discovery -> diverse excerpt retrieval -> quoted synthesis -> semantic review -> coverage signals / abstention",
         "research_engine": "LangGraph StateGraph (stateless per request, no cross-user memory)",
         "langsmith_tracing": (
             "configured" if (os.getenv("LANGSMITH_TRACING", "false").lower() in {"true", "1", "yes"}
@@ -222,7 +226,7 @@ async def deep_research(article_id: str, payload: ResearchPayload = ResearchPayl
             "article_id": article_id, "demo": True, "generated_by": "demo_notice",
             "answer": ai.no_information_message(language), "sources": [],
             "report": research_v2.initial_report([]),
-            "workflow": {"engine": "LangGraph StateGraph", "version": "0.9", "trace": [],
+            "workflow": {"engine": "LangGraph StateGraph", "version": "0.10", "trace": [],
                          "review_status": "demo_excluded", "source_count": 0, "approved_findings": 0},
             "caveat": "Illustrative demo content is not real reporting.",
             "stages": ["Demo content excluded from research"],

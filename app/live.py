@@ -61,7 +61,7 @@ class NewsMonitor:
         recent = self.watched.get(region, 0) > time.monotonic()
         return {
             "region": region,
-            "provider": "Google News RSS + BBC News India RSS (national)",
+            "provider": "Google News RSS + curated direct publisher RSS (where configured) + BBC India RSS (national)",
             "poll_seconds": self.poll_seconds,
             "watched": recent or region == "All India",
             "refreshing": self._locks.get(region, asyncio.Lock()).locked(),
