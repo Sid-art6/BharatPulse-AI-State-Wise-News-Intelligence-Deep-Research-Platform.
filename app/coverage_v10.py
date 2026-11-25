@@ -16,7 +16,12 @@ STOP = {"the", "and", "for", "are", "from", "into", "about", "after", "says", "s
 _QUANTITY = re.compile(
     r"(?<![\w])(?:₹|Rs\.?|INR|US\$|USD|£|\$)\s*\d[\d,]*(?:\.\d+)?(?:\s*(?:crore|lakh|million|billion|trillion))?"
     r"|(?<![\w])\d+(?:\.\d+)?\s*%"
-    r"|(?<![\w])\d[\d,]*(?:\.\d+)?\s*(?:crore|lakh|million|billion|trillion)\b",
+    r"|(?<![\w])\d[\d,]*(?:\.\d+)?\s*(?:crore|lakh|million|billion|trillion)\b"
+    r"|(?<![\w])\d[\d,]*(?:\.\d+)?\s*(?:km|kilomet(?:er|re)s?|m(?:et(?:er|re))s?|hectares?|tonnes?|"
+    r"people|persons|elephants|animals|families|villages|vehicles|students|candidates|days|hours)\b"
+    r"|(?<![\w])\d[\d,]*\s+(?:injured|wounded|killed|dead|missing|hospitali[sz]ed)\b"
+    r"|\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:indians|people|persons|injured|killed|students|families)\b",
+
     flags=re.IGNORECASE,
 )
 
@@ -59,6 +64,8 @@ def analyse_coverage(sources: list[dict[str, Any]]) -> dict[str, Any]:
     numbers: list[dict[str, Any]] = []
     seen = set()
     for i, source in enumerate(source_rows, 1):
+        if i > 1 and source.get("relationship") == "topic_context":
+            continue
         for field in ("title", "description"):
             raw = str(source.get(field) or "")[:1200]
             for match in _QUANTITY.finditer(raw):
@@ -68,7 +75,21 @@ def analyse_coverage(sources: list[dict[str, Any]]) -> dict[str, Any]:
                     continue
                 seen.add(unique)
                 start, end = match.span()
-                context = raw[max(0, start - 45):min(len(raw), end + 45)].strip()
+                # Expand the excerpt window to word boundaries so a numeric
+                # context never starts mid-word (e.g. 'apers and answer keys').
+                left = max(0, start - 55)
+                right = min(len(raw), end + 55)
+                if left > 0 and not raw[left - 1].isspace():
+                    next_space = raw.find(" ", left, start)
+                    if next_space != -1:
+                        left = next_space + 1
+                if right < len(raw) and not raw[right].isspace():
+                    next_space = raw.find(" ", right)
+                    if next_space != -1:
+                        right = next_space
+                    else:
+                        right = len(raw)
+                context = raw[left:right].strip()
                 numbers.append({"source": i, "value": literal, "context": context, "field": field})
                 if len(numbers) >= 15:
                     break
@@ -84,5 +105,5 @@ def analyse_coverage(sources: list[dict[str, Any]]) -> dict[str, Any]:
         "headline_overlap_groups": overlap,
         "reported_numbers": numbers,
         "independence_status": "Not established: different labels, domains or similar headlines do not prove independent reporting",
-        "numbers_status": "Literal amounts from RSS headlines/excerpts; not verified, comparable or necessarily current",
+        "numbers_status": "Literal reported figures and units from RSS excerpts; not verified, comparable or necessarily current",
     }

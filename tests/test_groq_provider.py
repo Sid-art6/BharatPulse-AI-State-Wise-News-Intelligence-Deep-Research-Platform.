@@ -106,7 +106,7 @@ def test_chat_uses_groq_provider_with_cited_evidence(monkeypatch, tmp_path):
         source = core.parse_rss(b'<rss><channel><item><title>Karnataka transport announcement</title><link>https://news.example/rail</link><description>A transport announcement was published.</description><source>Example Paper</source></item></channel></rss>', 'Karnataka')
         core.save_articles(source)
         response = client.post('/api/chat', json={
-            'article_id': source[0]['id'], 'question': 'What does the article report?', 'language': 'Hindi',
+            'article_id': source[0]['id'], 'question': 'What happened according to the article report?', 'language': 'Hindi',
         })
         assert response.status_code == 200
         data = response.json()

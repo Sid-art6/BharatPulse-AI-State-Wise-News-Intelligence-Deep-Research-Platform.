@@ -30,10 +30,15 @@ def test_query_is_bounded_to_server_stored_title():
     '{"decisions":[{"id":1,"supported":"true"}]}',
     '{"decisions":[{"id":0,"supported":true}]}',
     '{"decisions":[{"id":1,"supported":true},{"id":1,"supported":true}]}',
-    '{"decisions":[{"id":1,"supported":true},{"id":999,"supported":true}]}',
+
 ])
 def test_malformed_semantic_review_never_approves(raw):
     assert agents.parse_review(raw, [{"claim": "a"}, {"claim": "b"}]) == set()
+
+
+def test_unknown_reviewer_id_does_not_approve_that_id():
+    assert agents.parse_review('{"decisions":[{"id":1,"supported":true},{"id":999,"supported":true}]}',
+                               [{"claim":"a"},{"claim":"b"}]) == {1}
 
 
 def test_semantic_review_accepts_only_explicit_positive_id():
@@ -65,7 +70,7 @@ def test_retrieval_without_model_routes_to_source_index(monkeypatch):
     monkeypatch.setattr(ai, 'llm_is_configured', offline)
     state = asyncio.run(agents.retrieve({'selected':SOURCES[0], 'discovered':[]}))
     assert state['sources'][0]['id'] == 'one'
-    assert agents.route_after_retrieval(state) == 'assemble'
+    assert agents.route_after_retrieval(state) == 'synthesise'  # six-stage graph records skipped AI work
     done = asyncio.run(agents.assemble({**state, 'review_status':'not_run'}))
     assert done['mode'] == 'source_index_no_llm'
 

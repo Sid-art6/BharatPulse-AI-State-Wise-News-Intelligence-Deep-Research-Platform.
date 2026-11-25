@@ -1,178 +1,203 @@
-# BharatPulse AI · Local News Intelligence
+<div align="center">
 
-**Browse Indian news by state → discover regional reporting → research related headlines → ask a source-grounded AI.**
+# BharatPulse AI
 
-A runnable, local-first prototype using **FastAPI, SQLite, JavaScript, RSS, Open-Meteo, real LangGraph and optional GroqCloud/Ollama + LangSmith**. **v0.10** adds curated direct publisher RSS discovery, source-origin labels, diversity-aware research retrieval, and evidence-only coverage/quantity indicators. It preserves v0.9 LangGraph Deep Research, v0.8 Weather Intelligence, and v0.7 source-grounded chat. LangSmith stays disabled by default. This remains an **MVP, not a production news, meteorology or independent fact-checking service**.
+### Understand the story behind India's headlines.
 
-## What's implemented in v0.10
+**State-wise News Intelligence &nbsp;·&nbsp; Six-Stage Deep Research &nbsp;·&nbsp; Weather Intelligence**
 
-| Capability | Actual behaviour |
+[![GitHub Actions](https://github.com/Sid-art6/BharatPulse-AI-State-Wise-News-Intelligence-Deep-Research-Platform./actions/workflows/ci.yml/badge.svg)](https://github.com/Sid-art6/BharatPulse-AI-State-Wise-News-Intelligence-Deep-Research-Platform./actions) ![Python](https://img.shields.io/badge/Python-3.11%2B-blue) ![FastAPI](https://img.shields.io/badge/API-FastAPI-087f8c) ![LangGraph](https://img.shields.io/badge/Agents-LangGraph-1849a3) ![Version](https://img.shields.io/badge/Release-v1.6.0-1556a3)
+
+**A local-first, source-grounded AI engineering portfolio application for investigating regional news and city weather across India.**
+
+[Explore the architecture](#architecture) · [Run locally](#run-locally) · [Deploy on Render](#public-demo-deployment) · [Security model](#security-and-trust)
+
+**Live public demo:** *A URL will be added only after a successful Render deployment and smoke test.*
+
+</div>
+
+---
+
+## Product preview
+
+> These are browser captures of the implemented **HTML/CSS/JavaScript frontend**, rendered against controlled offline test fixtures. **They are not captures of live news, live meteorology or a completed AI research run.** News cards are explicitly labelled as illustrative; weather values are from an offline UI test fixture. The images demonstrate the three-screen layout, not the availability or factual correctness of live feeds. Replace them with verified live-service captures after deployment.
+
+### News Intelligence
+
+![BharatPulse AI News Intelligence interface in explicitly labelled demo mode](docs/screenshots/01-news-intelligence-demo.png)
+
+*Browse state-wise RSS entries, topic filters, original publisher references and transparent coverage signals. This screenshot uses illustrative demo headlines.*
+
+<table>
+<tr><td width="50%"><strong>Six-Stage Deep Research</strong><br/><img src="docs/screenshots/02-deep-research-workflow.png" alt="Running application showing six LangGraph pipeline stages and evidence principles"/><br/><small>Workflow interface; no fabricated completed report.</small></td><td width="50%"><strong>Weather Intelligence</strong><br/><img src="docs/screenshots/03-weather-intelligence-fixture.png" alt="Running application weather interface with clearly marked test fixture"/><br/><small>Forecast rendering checked with explicit offline test data.</small></td></tr>
+</table>
+
+## Running the reliability release
+
+**v1.6 objective-grounded QA update (25 November 2026):** The Deep Research Planner now identifies incident-specific objectives (event dates, official statements, casualties, assistance, attribution, location and subsequent developments), and Report Builder reconciles them against source passages and approved findings instead of declaring supported facts unknown. The quantity inventory also recognises forms such as “11 injured” and “two visitors”. In Ask AI, a model response that fails review can fall back to a narrowly selected, verbatim publisher passage rather than an irrelevant headline-only refusal. These are platform-wide rules, not hardcoded answers for individual articles. See [v1.6 QA and deployment gate](docs/V16_QA_AND_DEPLOYMENT.md).
+
+**Verification scope:** The offline suite was completed in isolated groups: 239 passed, 7 skipped, zero failed. The seven skipped cases require LangGraph in this testing environment. Live Groq answer generation and permitted publisher access must still be checked on the deployment machine.
+
+
+Start with the [Windows setup](START_HERE.md). The [repair and verification report](docs/REPAIR_AND_VERIFICATION.md) records the root causes, live publisher checks, test scope and operating limits. Ask AI loads evidence in the background and shares the selected article context with Deep Research. Publisher-syndicated text and direct page text carry separate provenance.
+
+## Context-first chat and short-term memory
+
+The current implementation corrects a recurring acronym-context failure: a question such as **“What is SIR?”** in an elections article now uses the selected article's RSS title, excerpt and topic **before** choosing a meaning. Unknown abbreviations are handled by a context-aware single general-model prompt, not by a long list of story-specific hardcoded answers. Documented legal arguments can be quoted without falsely presenting them as court rulings.
+
+Conversation memory is **first-party, small and isolated**: the most recent five question/answer pairs per selected article are stored in SQLite for up to 24 hours, keyed to a secure random browser-session cookie. Only previous **user questions**, not AI answers, are fed back to resolve references; users can reopen or clear a conversation. There is **no paid memory service, vector database or embedding API**.
+
+An **optional**, disabled-by-default Google News RSS lookup can fetch related headlines for explicit fresh-news queries (`BHARATPULSE_ENABLE_ON_DEMAND_RSS_SEARCH=true`). It is free of paid search API fees, but it does **not** read full publisher articles, prove factual correctness or provide a reliable live-web search SLA.
+
+The application remains RSS-grounded: article claims can require multiple Groq calls for a safety review; automated tests are not a substitute for live model evaluation. See [context-first memory and QA notes](docs/CONTEXT_FIRST_MEMORY_QA.md).
+
+## What it does
+
+| Capability | Engineering implementation |
 |---|---|
-| **Open app → refresh check** | The browser asks the server to watch its selected region; if that region's feed was not checked within the last **5 minutes**, a background fetch begins immediately. Cached news is displayed while fetching. |
-| **Every 5 minutes** | While the FastAPI process runs, it polls **All India** and regions recently viewed in a browser. The UI synchronises with the database every **20 seconds** while visible. This is polling, **not provider push**. |
-| **Regions** | 28 Indian states, 8 union territories, and All India; region tags require an explicit mention, except when a curated direct publisher feed identifies a specific city/state section (labelled weaker `publisher_section` evidence). |
-| **Multilingual ingestion** | Google News RSS searches in English plus a regional-language locale where supported by the chosen region. Native-script titles and excerpts remain unchanged. Language detection uses heuristic Unicode script rules. |
-| **English previews** | Original English RSS excerpts appear by default. For non-English excerpts, the configured **Groq API or local Ollama** can generate a bounded English translation preview (up to 12 pending excerpts per refresh). Without an enabled LLM, the original-language excerpt is clearly labelled **not translated**. |
-| **Response language** | Choose **English (default)**, Hindi, Bengali, Tamil, Telugu, Kannada, Malayalam, Marathi, Gujarati, Punjabi, Odia, Assamese or Urdu for the optional AI chat and research brief. |
-| **Sources** | Google News RSS, regional-language Google News discovery, BBC India RSS for national coverage, 25 curated **The Indian Express** direct RSS sections and 4 candidate **The Hindu** direct RSS sections (at most two fixed publisher feeds per watched region). Only RSS metadata is indexed. This is not a direct API integration or full article feed from every publisher. |
-| **Direct regional feeds (v0.10)** | The Indian Express official RSS directory provides allowlisted national, state and city feeds (including Karnataka, Maharashtra, Kerala, West Bengal, Assam, Manipur, and others). Up to two additional publisher-hosted RSS requests are attempted for watched regions with a configured section; regional Google News still runs if the direct feed times out. No arbitrary URLs can be supplied from the browser. Feed availability and terms must be checked before commercial use. |
-| **Publisher origin signals (v0.10)** | SQLite stores whether each new article was first indexed through Google News RSS, direct publisher RSS, BBC RSS, or an unclassified old record. A section label is not proof that an event occurred there. Exact headline deduplication remains active; provenance and outlet counts do not prove independence. |
-| **Research evidence comparison (v0.10)** | Research retrieval gently prefers distinct publisher labels when relevant; the report shows near-identical headline groups and exact numerical expressions found in RSS titles/excerpts, with source anchors. These are **reported quantities**, not verified, comparable or independently established facts. |
-| **AI filtering** | Optional Groq or Ollama screens up to 20 **new** headlines per regional feed check for news relevance (previously indexed or rejected headlines are not repeatedly screened); without it, deterministic cleaning, deduplication, region and topic tagging still work. |
-| **Research v0.9 — real LangGraph** | Six workflow nodes: deterministic planner → RSS discovery → stored-source retrieval → Groq/Ollama quoted synthesis → conservative model semantic review → report assembly. Conditional routing skips LLM work if unavailable. A user-provided research angle guides synthesis but **is not evidence**. All approved findings still require exact RSS excerpt quotes, numeric checks and review. Reports include an inspectable execution-stage trace and publication-only timeline. |
-| **Optional LangSmith (v0.9)** | Set `LANGSMITH_TRACING=true`, an API key, and a project name in local `.env`; compiled LangGraph runs and LLM completions become traceable. **Disabled by default.** Traces may contain user questions, source snippets, prompts, and model output and are uploaded to LangSmith. No tracing credentials are returned by API endpoints. |
-| **Chat v0.7** | Generates short **atomic English claims** for the selected article and related RSS metadata. Requires an exact quotation from the claimed source, checks citation indices and figures, and uses a separate model-based semantic entailment review. Only approved claims may be translated; translations receive a separate equivalence check. Fails closed to a polite insufficient-evidence response if review fails. Shows supporting quotes and cited publisher links. This reduces risk but is **not a factual-accuracy guarantee**. |
-| **No evidence** | The service responds politely that available sources do not establish the answer, including a selected-language fallback even without a model. |
-| **Demo mode** | Clearly fictional articles, isolated from real live news. |
-| **Weather Intelligence (v0.8)** | New separate dashboard section. Choose among **39 Indian city points** covering all 28 states and 8 UTs; view current forecast conditions, humidity, wind and Open-Meteo **7-day model forecasts** with maximum precipitation probability and expected precipitation. This is city-point data, not a prediction for the whole state. |
-| **Interactive India weather map** | Leaflet/OpenStreetMap map with temperature labels for 12 sample cities. **Choosing any supported city automatically recentres and highlights the map**, including cities outside the 12 samples; clicking map markers updates the city selector and forecast. Markers are **point estimates**, not radar, warnings, or a continuous weather layer. Map tiles require internet and must follow provider terms. |
-| **Weather-related news** | Reuses the live RSS news index. Matches weather-related titles/excerpts in the selected city’s region. **Research** and **Ask AI** open the same excerpt-grounded article tools as News Intelligence. Empty results do not imply no weather event occurred. |
-| **Weather AI** | Answers forecast questions from Open-Meteo measurements in deterministic English. With Groq/Ollama configured, other supported response languages use **translation + meaning-preservation review**. Unsupported or unavailable forecast data is not invented. It does not independently predict the weather or issue official warnings. |
-| **Weather caching** | City forecasts cached for **10 minutes** to reduce provider calls; refresh is independent of the five-minute news polling. Provider failures show unavailable information rather than fabricated readings. |
+| **India-wide regional discovery** | RSS feeds for 28 states, 8 union territories and national news; selected regional-language searches and curated direct publisher feeds |
+| **Traceable source data** | Source URLs, publisher/feed-origin labels, region-confidence rules, deduplication and SQLite metadata storage |
+| **Context-first, memory-enabled AI chat** | Article metadata informs acronym disambiguation; session-isolated SQLite memory supports follow-ups; general background stays distinct from cited RSS claims |
+| **RSS evidence safeguards** | Claim decomposition, exact excerpt quotation, numeric validation, conservative semantic review and explicit abstention when evidence is missing |
+| **Six-stage LangGraph research** | Planner → Discovery → Retriever → Synthesis → Quality Reviewer → Report Builder, including a visible execution trace |
+| **Research quality signals** | Source-by-source title/excerpt comparison, headline-only vs excerpt coverage, possible overlap and numerical mentions, **without presenting these as fact checks** |
+| **Multilingual support** | Native-script feed discovery and an optional 13-language response interface, with verified translation fallback behaviour |
+| **Weather intelligence** | Open-Meteo current conditions and seven-day city forecasts; Leaflet map of **city-point** temperatures, not a national heatmap |
+| **Public demo controls (v1.1)** | Opt-in AI access, per-client and global provider-call limits, read/write quotas, host restrictions, security headers and streamed request-size constraints |
+| **Automated tests and CI** | Offline API, evidence workflow, regional coverage, weather and public-demo security regression checks |
 
+## Reliability and research improvements (v1.3)
 
-### What is **not** implemented
+Version 1.3 follows a **source-first, question-aware** architecture, not a collection of hardcoded answers for particular news items.
 
-- Direct X API, Google Trends, or licensed direct regional publisher APIs; the v0.10 direct **RSS** feed is not a publisher API or permission to reproduce full articles.
-- Licensed full-article ingestion, real-time push notifications, guaranteed coverage for every region/language, or a verified fake-news detector.
-- **Durable LangGraph checkpointing**, cross-user memory, background jobs, semantic vector search, high-confidence syndication detection, independent fact-checking, human editorial approvals, user accounts, rate limiting, cloud deployment or production monitoring. The v0.9 workflow is stateless per request and its model review is **not authoritative fact verification**.
-- Guaranteed accuracy of model-written translations or AI claims. **RSS snippets are short, incomplete, unverified source descriptions** and citations are numerical references, not independent verification.
-- Weather radar, official IMD alerts, hyperlocal forecasts for arbitrary GPS coordinates, terrain-level weather simulation, or guaranteed multilingual weather translation. The map shows a curated set of city-level model readings only.
+- **Ask AI identity guard:** compound questions about a person named in the selected article no longer enter free-form biographical generation. It is never valid to invent previous employers, ownership, motives or appointment dates from an RSS headline.
+- **Direct metadata answers:** publisher, feed timestamp (not the event date), feed origin and source link are returned from indexed fields; no LLM call is needed.
+- **Question relevance:** a correctly quoted announcement does not answer a question about a predecessor, previous role, exact date, responsibilities or implications unless the quote actually contains that information.
+- **Six-node research handoff:** Planner extracts requested information categories and constructs one bounded supplementary RSS query when relevant. Discovery keeps search results request-scoped; Retriever ranks potentially same-incident reporting. Synthesis generates claims from exact evidence. Quality Reviewer approves or rejects them. Report Builder assembles an attributed summary, source highlights and explicit gaps.
+- **Two evidence classes, visibly separated:** AI-reviewed findings and additional literal RSS reporting are never silently combined or portrayed as independently verified. Different publishers may rely on the same original report.
+- **More informative reports:** a second potentially relevant headline is visible in a prominent section even if the model generates only one approved finding. Requested research topics show whether available RSS text explicitly mentions the requested information.
+- **QA:** additional synthetic, topic-independent tests plus `python scripts/verify_local.py` for a smoke test of a running app. Offline tests do not prove that Groq responses will always be accurate.
 
-## Development roadmap
+**Historical v1.3 research depth limit:** Most indexed entries included only a headline. The new v1.4 optional, permitted article reader may provide additional text, but it never bypasses paywalls or claims to read inaccessible pages. It therefore cannot establish a subject's complete biography or the exact date of an event absent from the RSS metadata. The useful outcome for such questions is a clearly identified evidence gap, not a fabricated answer.
 
-Status means **implemented and covered by local automated tests**, not an independently validated public deployment. See limitations above.
+For the release test procedure, see [Final Release Verification](docs/FINAL_RELEASE_VERIFICATION_V1_3.md).
 
-| Version | Planned improvement | Status |
-|---|---|---|
-| **v0.6** | Live RSS news, Groq RAG, multilingual responses and RSS-grounded research | ✓ Complete (previous release) |
-| **v0.7** | Quote-anchored claims, multilingual translation review, safer abstentions | ✓ Complete (49 tests on user's Windows laptop) |
-| **v0.8** | Multilingual Weather Intelligence, seven-day model forecasts, interactive city-point weather map, regional weather news and forecast Q&A | ✓ Complete; 55 tests previously passed on Windows; live Bengaluru English/Hindi forecast manually checked |
-| **v0.9** | Real LangGraph Deep Research orchestration, optional research angle, evidence review trace and optional LangSmith integration | ✓ 73 tests passed on Windows; six-stage real Groq research run manually verified; LangSmith tracing not required |
-| **v0.10** | Curated direct regional publisher RSS sections, provenance labels, diverse retrieval and RSS quantity/overlap signals | **Update prepared; offline tests passed (real LangGraph integration requires Windows retest); live publisher feed check pending** |
-| **v1.0** | Security hardening, monitoring, evaluation and deployment-readiness review | ○ Planned |
+## Reliability improvements (v1.2 — Claude audit cross-check)
 
-**Evidence boundaries:** Open-Meteo supplies the weather measurements; Groq/Ollama **does not generate weather predictions**. The news index supplies article excerpts only. The v0.9 review can reject claims but cannot establish that reporting is true or independently corroborated. Forecast and news evidence remain separate. See [v0.9 workflow and LangSmith guide](docs/LANGGRAPH_LANGSMITH_V09.md).
+This version integrates high-priority findings from a separate 24 November 2026 code audit: safer event-slot routing, deterministic RSS publisher/date/link answers, a shared evidence-normalisation module, recognition of headline-only pseudo-excerpts, per-claim reviewer decisions, bounded historical evidence retrieval, stricter general-answer leakage controls, and research-only RSS discovery that **does not modify the live news feed**. It also improves forecast-query parsing and frontend request identity handling.
 
-## Run on Windows (PowerShell)
+**Operational boundary:** The six LangGraph stages are a coordinated workflow, not six independent LLM agents. Synthesis and review invoke the model; the other stages provide planning, discovery, retrieval and report assembly. If the model is unavailable, stages explicitly report skipped status instead of inventing findings.
 
-**Requirements:** Python 3.11/3.12, internet to install dependencies, network access to news feeds for live mode. No Docker or Node.js is required. Groq is optional for weather retrieval and evidence indexing but required for Groq-based AI synthesis; v0.9 research requires LangGraph installed. LangSmith tracing is optional and requires its own API key. The Open-Meteo free endpoint is intended for non-commercial usage; check its terms before commercial deployment.
+See [Claude audit integration and remaining limitations](docs/CLAUDE_AUDIT_INTEGRATION.md).
 
-1. Extract the ZIP, for example to `C:\Projects\bharatpulse-ai`.
-2. Open **PowerShell** in that directory (the one containing `requirements.txt`).
-3. Run:
+## Reliability improvements (v1.1)
 
-```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
+This release is **platform-wide**, not tailored to any named event. It keeps named article subjects and article-specific identity questions on the quoted-RSS evidence path. Publisher-identification questions return the selected source directly; related-topic headlines are separated from possible same-story coverage and do not qualify as proof of the selected incident. Generated assertions still require exact quotation, numerical support and a separate semantic review. All six LangGraph stages are visible, including skipped/degraded stages, and numeric coverage shows reported units beyond currency.
 
-4. Open **http://127.0.0.1:8000** in your browser. It starts in **Live RSS** mode and checks feed freshness automatically. The first fetch may take several seconds. Check the **Last success** indicator. If your network blocks news feeds, switch to **Demo data**.
-5. Choose a state, then choose an **AI response language**. Each selected state is monitored while in use. Open any news card and click **Research** or **Ask AI**. In Research, optionally specify a research angle, then select **Run multi-agent research**. The result displays the six LangGraph stages, approved source-quoted findings (if any), and publication timestamps.
-6. Scroll to **Weather Intelligence** (or click its sidebar link). Select an Indian city to load live model readings and the 7-day forecast. Use the map temperature markers to switch city. The **Weather-related news** panel uses the existing RSS index; **Ask Weather AI** explains the forecast, not unsupported weather predictions.
-7. For regional-language weather explanations, select Hindi or another response language, configure a working Groq/Ollama connection, and ask about the selected city’s upcoming days. The app keeps the English values if the translation cannot be verified.
-8. **Optional LangSmith:** add `LANGSMITH_TRACING=true`, your **own** `LANGSMITH_API_KEY`, and `LANGSMITH_PROJECT=BharatPulse-v09-Research` to the local `.env`; restart the server, run a real-news Research request, and inspect that project in [LangSmith](https://smith.langchain.com/). This sends prompts, RSS excerpts, user questions and responses to LangSmith; never trace private information without permission. Org-scoped keys may require `LANGSMITH_WORKSPACE_ID`. See [setup guide](docs/LANGGRAPH_LANGSMITH_V09.md).
-9. Stop with `Ctrl+C`. SQLite saves news at `data/news.db`.
+The application cannot guarantee that a model never hallucinates or that a publisher's source excerpt is true; independent verification and full-text coverage remain outside scope. See [release verification](docs/RELEASE_VERIFICATION_V1_1.md) and [technical reliability design](docs/PLATFORM_RELIABILITY_V1_1.md).
 
-**Status/API:** [health](http://127.0.0.1:8000/api/health), [metadata](http://127.0.0.1:8000/api/meta), [Swagger](http://127.0.0.1:8000/docs).
+## Try the main workflows
 
-**If you use Python 3.12**, replace `py -3.11` with `py -3.12`. If `py` is not recognised, inspect your local Python installation.
+1. **Discover regional coverage:** choose a state, enter multiple keywords, select a category, and reset filters without losing the underlying RSS index.
+2. **Ask a background question:** “What is a passport?” or “What is an FIR?” — labelled general AI explanation, **not** an article citation.
+3. **Ask about reporting:** “What evidence supports this claim?” — the app quotes indexed RSS metadata and distinguishes a publisher's statement from independent confirmation.
+4. **Ask a mixed question:** “What is Bali Jatra, and what does the article say?” — two clearly identified sections: general background and available article reporting.
+5. **Run Deep Research:** inspect the LangGraph execution trace, reviewed findings, publisher-by-publisher RSS title/excerpt comparisons, and explicit evidence limitations.
 
-## Run on Linux / WSL / macOS
-
-```bash
-cd bharatpulse-ai
-python3.11 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-In WSL you can usually open `http://127.0.0.1:8000` in the Windows browser. Python 3.12 also works.
-
-## Groq API (recommended) — Windows, beginner setup
-
-See **[docs/GROQ_WINDOWS_SETUP.md](docs/GROQ_WINDOWS_SETUP.md)** for exact staged steps for the Windows/VS Code laptop. No Docker, WSL, Node.js or Ollama is required.
-
-1. Copy `.env.example` to `.env` in the project folder (beside `requirements.txt`). Edit it **locally** in VS Code:
-
-```ini
-LLM_PROVIDER=groq
-GROQ_API_KEY=your_actual_secret_key_here
-GROQ_MODEL=openai/gpt-oss-20b
-ENABLE_LLM_FILTER=true
-BHARATPULSE_POLL_SECONDS=300
-```
-
-2. Install the new dependency (included in `requirements.txt`) and start the server:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-The `.env` file is now loaded automatically by Python at startup. **Do not share the key, put it in a screenshot, or commit `.env`**. `.gitignore` excludes it. Restart the server after editing `.env`.
-
-3. Open `http://127.0.0.1:8000`, click **Test AI connection**, then open a live headline and try **Ask AI** or **Research**. The test performs one small Groq inference request. You can also inspect `GET /api/meta` for `llm_provider` and `llm_configured`; **configured does not mean connection was verified**.
-
-**Optional Ollama instead:** install Ollama and pull `qwen2.5:3b`. In `.env`, use `LLM_PROVIDER=ollama`, `ENABLE_OLLAMA=true` and `OLLAMA_MODEL=qwen2.5:3b`; restart the FastAPI server. There is no automatic fallback between providers in v0.7: the chosen provider must work or the app displays its source index without LLM synthesis.
-
-**Usage and limits:** Groq has rate limits and may bill under certain plans. The RSS refresh remains every five minutes, but LLM screening runs only for newly discovered headlines. Chat and research can trigger additional requests. Original RSS text is preserved; generated English previews are machine translations, not guaranteed fact checks. 401 means the key is invalid; 429 means your account hit a rate limit.
-
-## Feed refresh settings
-
-Default polling is **300 seconds (5 minutes)**. The browser checks feed status every **20 seconds** but those checks do not trigger a network fetch every 20 seconds.
-
-```powershell
-$env:BHARATPULSE_POLL_SECONDS="300"
-```
-
-Set this **before** starting the server. The application enforces a minimum of 300 seconds to avoid excessive requests. Open/reopen a page: the browser always asks the server to check freshness, but an additional provider request is skipped if the selected region was checked less than 5 minutes ago. News checks operate **only while FastAPI is running**. Manual **Fetch live news** can explicitly retry a provider.
-
-**Providers can fail, rate-limit or delay their feeds.** The status distinguishes the latest attempt, success, a fetch in progress, and failure. Previous cached articles remain available on failure. Polling isn't an instant breaking-news stream.
-
-## Verify it
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe -m pytest -q
-```
-
-Run from the folder containing `requirements.txt`. The suite includes parsing, regional script recognition, Unicode deduplication, startup/live-refresh API flows, response-language validation, conservative claim and quotation gates, rejected figures, semantic-review failures, mistranslation handling, research citation validation and publication-only timestamps. Feed requests are mocked in tests; **successful live external RSS access cannot be guaranteed until tested on your machine**.
+> **Source scope:** RSS metadata is always available for indexed sources; accessible publisher text is optional and explicitly labelled. It cannot provide a full-article summary when retrieval was blocked or incomplete. For journalism and consequential decisions, read the original publisher reports.
 
 ## Architecture
 
-```text
-Open dashboard ──► FastAPI /api/news/watch ──► is a feed check due?
-                                                   │
-                                    yes ──► RSS: English + regional query
-                                                   │
-                                 clean + preserve original source metadata
-                                                   │
-                         Unicode dedup + region/topic/language tagging
-                                                   │
-                             optional Groq/Ollama relevance and translation
-                                                   │
-                                        SQLite article store
-                                                   │
-Browser (every 20 sec) ◄── FastAPI news/status + news articles
-      │
-      ├── Research v2 ► RSS discovery ► Groq/Ollama JSON ► excerpt-quote checks ► structured report
-      ├── Ask AI v0.7 ► source-only claim proposals (English + exact quotations)
-      │                  ► deterministic quote/index/number checks
-      │                  ► second LLM entailment review
-      │                  ► translate approved claims when requested + verify meaning
-      │                  ► source-linked draft, or honest abstention
-      └── Weather v0.8 ► fixed city coordinates ► Open-Meteo JSON (10-minute cache)
-                         ► 7-day cards + city-point Leaflet map
-                         ► forecast-only answer grounded in provider numbers
-                         ► optional reviewed multilingual translation
-                         ► regional weather RSS cards with Research / Ask AI
+```mermaid
+flowchart TD
+    Browser[Responsive browser UI] --> FastAPI[FastAPI API + security middleware]
+    FastAPI --> News[Regional RSS ingestion]
+    FastAPI --> Weather[Open-Meteo weather]
+    FastAPI --> Router[Chat intent routing]
+    Router --> Background[Labelled general knowledge]
+    Router --> Chat[RSS-grounded article chat]
+    FastAPI --> Research[LangGraph Deep Research]
+    News --> DB[(SQLite headline and source index)]
+    DB --> Chat
+    DB --> Research
+    Research --> P[Planner]
+    P --> D[Discovery]
+    D --> R[Retriever]
+    R --> S[Synthesis]
+    S --> Q[Quality Reviewer]
+    Q --> Report[Report Builder]
+    Chat --> LLM[Optional Groq or local Ollama]
+    Research --> LLM
 ```
 
-The v0.10 regional RSS/research implementation is in **[docs/REGIONAL_COVERAGE_V10.md](docs/REGIONAL_COVERAGE_V10.md)**; v0.9 LangGraph/observability implementation is in **[docs/LANGGRAPH_LANGSMITH_V09.md](docs/LANGGRAPH_LANGSMITH_V09.md)**; upgrading from v0.8 to v0.9 is covered by **[docs/WINDOWS_UPGRADE_V09.md](docs/WINDOWS_UPGRADE_V09.md)**. The v0.8 weather workflow and limitations are in **[docs/WEATHER_V08.md](docs/WEATHER_V08.md)**; Windows upgrade instructions are in **[docs/WINDOWS_UPGRADE_V08.md](docs/WINDOWS_UPGRADE_V08.md)**. The research flow is documented in **[docs/RESEARCH_V2.md](docs/RESEARCH_V2.md)**. The v0.7 chatbot checks and limitations are in **[docs/CHAT_V07.md](docs/CHAT_V07.md)**. Upgrading from your working Windows v0.6 GitHub checkout? Read **[docs/WINDOWS_UPGRADE_V07.md](docs/WINDOWS_UPGRADE_V07.md)**.
+Six nodes represent distinct processing stages, not six independent LLMs. Synthesis and review may call Groq/Ollama; the other stages are deterministic. Missing AI configuration appears as explicitly skipped steps rather than silent bypass.
 
-For v0.7 chat and v0.10 research, model review may require additional Groq calls; news chat may use 2 model calls for English and up to 4 for other supported languages. This can increase latency and Groq rate-limit usage. The LLM does not independently browse the internet. News text is untrusted input. Do not upload private data or use this MVP for official reporting or consequential decisions without editorial review, permissions and evidence verification.
+**Engineering choices.** News questions remain evidence-constrained; general-knowledge questions use a separate explanation path, with any relevant selected RSS headline explicitly labelled and cited. Mixed questions label general background and article evidence independently. Original RSS metadata is retained and quoted rather than treating a language-model response as ground truth. Research stages have explicit inputs and quality checks, and the application can abstain when evidence is inadequate. The Open-Meteo forecast is kept separate from RSS weather headlines.
 
-For a beginner-friendly explanation of both this project and **Globalmove-AI**, see [`docs/BEGINNER_GUIDE.md`](docs/BEGINNER_GUIDE.md). The genuinely production-grade roadmap is in [`docs/NEXT_STAGES.md`](docs/NEXT_STAGES.md).
+## Technology stack
+
+| Layer | Technologies |
+|---|---|
+| Backend | Python, FastAPI, Pydantic, HTTPX, Uvicorn |
+| Agent orchestration | LangGraph StateGraph; structured, multi-stage execution trace |
+| AI | Groq API; optional Ollama for local execution |
+| Data | SQLite, RSS/XML processing, source provenance and keyword-based retrieval |
+| Weather and maps | Open-Meteo, Leaflet, OpenStreetMap tiles |
+| Frontend | JavaScript, semantic HTML, responsive CSS |
+| Quality and delivery | Pytest, GitHub Actions, Render Blueprint, basic public-demo security controls |
+
+## Run locally
+
+**Requirements:** Python 3.12 recommended; Python 3.11 is also supported by the project requirements.
+
+```powershell
+# Windows PowerShell, from the project folder
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements-dev.txt
+Copy-Item .env.example .env
+# Edit .env only on your machine. Set GROQ_API_KEY if you want Groq features.
+python -m pytest -q
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Open **http://127.0.0.1:8000**. Demo mode shows invented, prominently labelled training scenarios. Live mode fetches RSS entries and requires source availability. LangGraph and public AI need their respective dependencies and provider settings; never paste a private key in a GitHub issue or README.
+
+## Public demo deployment
+
+This repository contains [`render.yaml`](render.yaml), a free-tier **Render Blueprint** for the FastAPI server. See [deployment instructions](docs/DEPLOY_RENDER_V10.md) for connecting the repository, creating the service, checking `/api/health`, configuring secrets, and enabling guarded public AI only when appropriate.
+
+**Important operational boundaries:** Render free services can sleep when idle; SQLite is placed in `/tmp` and is **ephemeral** on restart/redeploy; background RSS polling is not an always-on job on this tier. The application refreshes its index when visited. This is a portfolio demonstration, not a 24/7 news or meteorological warning service.
+
+## Security and trust
+
+- **No committed secrets.** `.env` and local databases stay out of source control. Set keys in deployment environment variables only.
+- **AI off by default on the public server.** `BHARATPULSE_PUBLIC_AI_ENABLED=false` protects the Groq budget until an operator explicitly enables controlled usage.
+- **Bounded public traffic.** Single-process quotas allow at most 6 AI requests per client and 30 AI requests globally per hour (while running), with separate RSS and read limits. Streamed request bodies are capped at 16 KiB, and cross-origin browser writes are restricted. These limits reset on restart and are not a spending guarantee.
+- **Browser protections.** Restrictive host validation (when configured), Content Security Policy, anti-framing, MIME-sniffing and referrer controls.
+- **Truthfulness.** Only publisher RSS titles/excerpts are indexed. Source diversity, numerical mentions, model judgements and publisher labels are **not independent factual verification**.
+- **Security caveat.** In-memory quotas are not distributed across instances and can be evaded by distributed clients. A high-traffic paid production service needs WAF/edge limiting, stronger authentication, persistent storage, audit logging and a full external security review.
+
+Full details: [Public demo safety](docs/SECURITY_V10.md) and [second-pass fixes and remaining limitations](docs/V1_SECOND_PASS_RELEASE_NOTES.md).
+
+## Tests and engineering validation
+
+**Context-first candidate QA:** 135 local tests passed; 6 LangGraph-dependent tests skipped in the packaging environment. Live Groq requests and a full browser-session check require your own configured local environment before the final GitHub release. See [final context QA and Windows acceptance checklist](docs/FINAL_V1_CONTEXT_VALIDATION.md).
+
+```bash
+python -m compileall -q app
+python -m pytest -q
+```
+
+The automated suite covers RSS parsing and deduplication, evidence and numeric checks, weather normalisation, LangGraph integration, API contracts, v1.0 public safety middleware, and dedicated regression cases for complaint-definition typos, unsupported named roles, article causality, mixed questions and multi-source citation deduplication. The frontend design follows three supplied reference photos, while a visible AI status control supports local connection testing; see [design fidelity and accuracy boundaries](docs/PHOTO_MATCH_V10.md). GitHub Actions executes it on Ubuntu with Python 3.12.
+
+## Project constraints
+
+BharatPulse AI is an **engineering portfolio project**, not an official news agency, independent fact-checking organisation, or meteorological authority. News may be incomplete or stale; RSS providers can restrict or change their feeds; AI outputs may contain errors. Always inspect original publishers and authoritative weather warnings for consequential decisions.
+
+---
+
+<div align="center">
+<strong>Built to demonstrate practical AI engineering—not just prompting.</strong><br/>
+<sub>FastAPI · LangGraph · source-grounded RAG · multilingual workflows · weather APIs · reproducible tests</sub>
+</div>

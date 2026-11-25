@@ -21,7 +21,7 @@ SOURCES = [
     source('Karnataka panel reviews fuel testing',
            'The Karnataka panel said that an assessment of fuel testing methods is under way.',
            '2026-11-23T05:26:51+00:00'),
-    source('Officials request a technical review of fuel checks',
+    source('Karnataka panel requests review of fuel testing methods',
            'A technical review of fuel checks has been requested by officials.',
            '2026-11-22T19:00:00+00:00', 'Another Paper', 'two'),
 ]

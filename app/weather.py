@@ -10,6 +10,7 @@ import asyncio
 import copy
 import re
 import time
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -177,7 +178,7 @@ def weather_news(region: str, *, limit: int = 12) -> list[dict[str, Any]]:
     results = []
     for row in rows:
         text = (row.get("title", "") + " " + row.get("description", "")).lower()
-        if any(term in text for term in WEATHER_TERMS):
+        if any((re.search(r"(?<![a-z])" + re.escape(term) + r"(?![a-z])", text) if term.isascii() else term in text) for term in WEATHER_TERMS):
             results.append({k: row.get(k) for k in ("id", "title", "publisher", "published_at", "url", "region", "language")})
             if len(results) >= limit:
                 break
@@ -186,6 +187,8 @@ def weather_news(region: str, *, limit: int = 12) -> list[dict[str, Any]]:
 
 def _days_for_question(question: str, daily: list[dict[str, Any]]) -> list[dict[str, Any]]:
     q = question.lower()
+    if re.search(r"\bday after tomorrow\b", q):
+        return daily[2:3]
     if any(w in q for w in ("tomorrow", "कल", "ನಾಳೆ", "நாளை")):
         return daily[1:2]
     if any(w in q for w in ("today", "आज", "ಇಂದು", "இன்று")):

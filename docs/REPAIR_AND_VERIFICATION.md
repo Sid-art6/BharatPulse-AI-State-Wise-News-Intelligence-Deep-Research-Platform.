@@ -1,0 +1,30 @@
+# Repair and verification
+
+The input was the full BharatPulse AI v1.4.1 archive. Its unmodified Python suite passed 223 tests. The active FastAPI research endpoint already attached the selected article's text before invoking LangGraph. The implementation also already scoped discovery to the request and parsed research reviewer decisions individually.
+
+| Confirmed cause | Change |
+|---|---|
+| Google entries arrived before direct feeds. Deduplication could discard a publisher link before the resolver ever saw it. | Store publisher-link metadata independently of dashboard admission. Prefer direct feed items in a new batch. Resolve legacy IDs from matching publisher feeds, indexed links, permitted redirects and optional public RSS lookup. |
+| Google cluster descriptions could concatenate headlines from multiple outlets under one publisher. | Drop list-style cluster descriptions. Preserve the selected headline and attribution. |
+| The page reader could accept the wrong title based on body words and extract navigation from a whole page. | Require headline identity, prefer structured article content, exclude labelled access restrictions, and use publisher-syndicated paragraphs from matching configured feed items. |
+| Retrieved bodies were always written to SQLite. The chat response could include the entire prepared passage set inside a source record. | Keep passages in bounded memory by default. SQLite records provenance, URL, timestamp and status. On-disk text requires an explicit licensed host. Client source records expose RSS descriptions and the response displays evidence excerpts. |
+| Freshness searches could replace the prepared first source. Metadata requests waited for external reads. | Keep the selected evidence through both freshness-cache paths. Answer explicit publisher and publication-date requests from the indexed record. |
+| Shared procedural language could promote another incident. Timelines and quantity extraction accepted topical records. | Separate tentative incident matches from contextual evidence before synthesis. Exclude context-only items from quantities and chronology, including for direct report-builder callers. |
+| The validator could pass newly invented charges or swapped units to the model reviewer. A supporting quote could omit surrounding attribution. | Compare material terms, named phrases and numerical units with source text. Provide the reviewer with surrounding source wording. Preserve independent per-finding decisions. |
+| The report could label retrieved article passages as RSS-only, and could label procedural history as professional history. | Track source depth through to the UI, retain legal research objectives, use reviewed findings in the lead, quote explicitly disputed statements and list unresolved objectives. |
+
+## Verification on 25 November 2026
+
+- **Python** — 240 tests passed on Python 3.12. The release includes 17 additional test cases. They cover nine subject areas, publisher links lost during deduplication, private syndicated passages, cluster descriptions, restricted pages, unsupported allegations, research objectives, freshness, definitions and retry behaviour. Earlier reviewer fixtures now use reversed actor/action claims that still require semantic review. The timeline integration fixture now identifies a shared incident. The suite emitted one dependency deprecation warning.
+- **Browser** — Chromium against a local Uvicorn server showed the greeting, initiated background preparation, submitted a metadata question and displayed the correct distinct publisher for each of two selected test articles. These were synthetic articles.
+- **Live publisher feeds** — Indian Express and The Hindu items from Google News matched their canonical direct-feed URLs. The execution network could reach RSS via its configured proxy, but direct publisher DNS resolution failed. Those articles remained RSS-only. Scroll's publisher feed returned 2,168 words for its feature on Telugu translations of Shakespeare. The live search for that feature returned no exact Google News match. A second feed run returned newer lead articles for Indian Express and The Hindu with no exact Google match, and again read the Scroll feature.
+- **Live app with a real source** — Using the Scroll article through FastAPI, Ask AI returned a publisher-passage summary and a separate metadata answer. Research retained the publisher evidence, ran the six-stage graph, and recorded skipped model synthesis and semantic review because a model was unavailable.
+- **Model-dependent checks** — Recorded test responses exercised Groq/Ollama success, failure, entailment decisions and multilingual validation. Live model-generated answer quality, translation fidelity, live weather forecasts and Windows execution remain unverified in this environment. The included commands support local verification.
+
+## Operating limits
+
+Publisher and event matching is conservative and lexical. Reworded, translated or ambiguously attributed reports may be excluded. A match is tentative. Availability of any publisher or full article varies. A reported dispute requires explicit wording. Publication times describe publication, and the amount list contains literal attributed figures. Offline explanations and interface labels can appear in English. No external key is required for RSS, deterministic metadata, a limited glossary, or the source index.
+
+The reader reuses successful evidence for up to 12 hours and ordinarily retries unavailable items after 35 minutes. By default article bodies reside in process memory. For domains where you have permission to store article text on disk, set the exact hostnames in `BHARATPULSE_LICENSED_STORAGE_HOSTS`. Runtime configuration and cache controls supplement publisher access checks. No generated answer is an independent fact-check.
+
+The legal glossary describes setting proceedings aside. A public example is the [Supreme Court of India order of 2 September 2025](https://api.sci.gov.in/supremecourt/2019/36607/36607_2019_6_36_63887_Order_02-Sep-2025.pdf).

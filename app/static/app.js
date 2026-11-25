@@ -1,6 +1,6 @@
 'use strict';
 const $ = (id) => document.getElementById(id);
-const state = {demo:false, language:'English', topic:'All topics', region:'All India', q:'', articles:[], selected:null, research:null, busy:false, metadata:null, lastFeedSuccess:null};
+const state = {chatHistoryVersion:0,chatCaveatShown:false,contextFetchVersion:0,demo:false, language:'English', topic:'All topics', region:'All India', q:'', articles:[], selected:null, research:null, busy:false, metadata:null, lastFeedSuccess:null};
 const escapeHTML = (input) => String(input ?? '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const allowedLink = (url) => /^https:\/\//i.test(String(url||''));
 async function request(url, options={}){
@@ -39,7 +39,17 @@ function createArticleCard(a){
   const provenance = a.is_demo ? '' : a.feed_origin==='direct_publisher_rss' ? ' · Direct publisher RSS' :
     a.feed_origin==='google_news_rss' ? ' · Google News RSS' : a.feed_origin==='bbc_publisher_rss' ? ' · BBC RSS' : '';
   const read = allowedLink(a.url)?`<a href="${escapeHTML(a.url)}" target="_blank" rel="noopener noreferrer">Source ↗</a>`:'';
-  return `<article class="news-card"><div class="card-top"><span class="category">${escapeHTML(a.topic)}</span><span class="card-age">${escapeHTML(relativeDate(a.published_at))}</span></div><h3>${escapeHTML(a.title)}</h3><div class="excerpt-label">${escapeHTML(excerptLabel)}</div><p>${escapeHTML(desc)}</p><div class="card-footer"><div class="card-source"><span class="source-pin"></span>${escapeHTML(a.region)} <span>·</span> ${escapeHTML(source)}${escapeHTML(provenance)}</div><div class="card-actions"><button type="button" data-research="${escapeHTML(a.id)}">Research ↗</button><button type="button" data-chat="${escapeHTML(a.id)}">Ask AI ↗</button>${read}</div></div></article>`;
+  const categoryThumb=state.demo ? (/farm|agricultur/i.test(a.topic+' '+a.title) ? 'news-farm-illustration.jpg' : /dam|water|metro|transport|infra/i.test(a.topic+' '+a.title) ? 'news-dam-illustration.jpg' : 'news-coast-illustration.jpg') : '';
+  const thumbnail=categoryThumb?`<div class="news-card-thumb"><img src="/static/assets/${categoryThumb}" alt="Decorative illustration, not documentary evidence"/><span>Illustrative</span></div>`:`<div class="news-card-thumb source-thumbnail" aria-label="Source-linked news article, no source photograph provided"><span>◈</span><small>RSS</small></div>`;
+  return `<article class="news-card">${thumbnail}<div class="card-top"><span class="category">${escapeHTML(a.topic)}</span><span class="card-age">${escapeHTML(relativeDate(a.published_at))}</span></div><h3>${escapeHTML(a.title)}</h3><div class="excerpt-label">${escapeHTML(excerptLabel)}</div><p>${escapeHTML(desc)}</p><div class="card-footer"><div class="card-source"><span class="source-pin"></span>${escapeHTML(a.region)} <span>·</span> ${escapeHTML(source)}${escapeHTML(provenance)}</div><div class="card-actions"><button type="button" data-research="${escapeHTML(a.id)}">Research ↗</button><button type="button" data-chat="${escapeHTML(a.id)}">Ask AI ↗</button>${read}</div></div></article>`;
+}
+function renderEvidenceInventory(items){
+  const box = $('newsEvidencePanel');if(!box)return;
+  if(!items.length){box.innerHTML='<p class="insight-empty">No indexed entries match the current filters. Refresh RSS or choose another region.</p>';return;}
+  const outlets=new Set(items.map(a=>a.publisher).filter(Boolean));
+  const topicCounts={};for(const item of items){const topic=item.topic||'Other';topicCounts[topic]=(topicCounts[topic]||0)+1;}
+  const popular=Object.entries(topicCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  box.innerHTML=`<div class="source-stat"><span>Indexed entries</span><strong>${items.length}</strong></div><div class="source-stat"><span>Publisher labels</span><strong>${outlets.size}</strong></div><h4>Most represented topics</h4>${popular.map(([topic,count])=>`<div class="insight-topic"><span>${escapeHTML(topic)}</span><b>${count} stories</b></div>`).join('')}<p class="insight-caveat">Counts reflect currently displayed feed entries, not a complete or verified survey of events.</p>`;
 }
 function updateStats(stats){
   $('statStories').textContent=Number(stats.total_articles||0).toLocaleString('en-IN');
@@ -51,19 +61,35 @@ function renderNews(data){
   $('resultCount').textContent=`${data.count} ${data.count===1?'STORY':'STORIES'}`;
   $('resultLabel').textContent=state.region==='All India'?'across India':`in ${state.region}`;
   updateStats(data.stats);
+  renderEvidenceInventory(data.items);
+  const filtersActive=Boolean(state.q)||state.topic!=='All topics';
   $('newsGrid').innerHTML=data.count?data.items.map(createArticleCard).join(''):
-    `<div class="empty-state"><h3>${state.demo?'No matching examples':'No matching live stories yet'}</h3><p>${state.demo?'Try choosing All India or clearing your search.':'BharatPulse checks for new RSS stories when you open the app and every five minutes. If the source has no relevant articles, try another region or inspect the feed status.'}</p></div>`;
+    `<div class="empty-state"><h3>${filtersActive?'No articles match your filters':state.demo?'No matching examples':'No matching live stories yet'}</h3><p>${filtersActive?'Try clearing your keywords or category. An empty result does not mean no event occurred.':state.demo?'Try choosing All India or clearing your search.':'BharatPulse checks for new RSS stories when you open the app and every five minutes. If the source has no relevant articles, try another region or inspect the feed status.'}</p>${filtersActive?'<button type="button" class="clear-filters-btn" id="clearEmptyFilters">Clear search & filters</button>':''}</div>`;
 }
 let searchTimer=null;
+let newsRequestVersion=0;
+let lastRenderedFilterKey='';
+function resetNewsFilters(){
+  clearTimeout(searchTimer);
+  state.q='';state.topic='All topics';
+  $('searchInput').value='';
+  renderTopics(state.metadata?.topics||['All topics']);
+  loadNews();
+}
 async function loadNews(silent=false){
   if(!silent)$('newsGrid').innerHTML='<div class="loading-view">Loading indexed stories…</div>';
   const qs=new URLSearchParams({region:state.region,topic:state.topic,q:state.q,demo:String(state.demo),limit:'60'});
+  const filterKey=qs.toString();
+  const requestVersion=++newsRequestVersion;
   try{
     const result=await request(`/api/news?${qs}`);
-    const current=JSON.stringify(state.articles.map(a=>[a.id,a.published_at]));
-    const incoming=JSON.stringify(result.items.map(a=>[a.id,a.published_at]));
-    if(!silent || current!==incoming)renderNews(result);
-  }catch(err){if(!silent){showNotice(err.message);$('newsGrid').innerHTML='<div class="empty-state"><h3>Could not load stories</h3><p>Check that the FastAPI server is running.</p></div>';}}
+    if(requestVersion!==newsRequestVersion)return; // Ignore outdated fetches when filters change rapidly.
+    const current=JSON.stringify(state.articles.map(a=>[a.id,a.published_at,a.description]));
+    const incoming=JSON.stringify(result.items.map(a=>[a.id,a.published_at,a.description]));
+    if(!silent || current!==incoming || lastRenderedFilterKey!==filterKey){
+      renderNews(result);lastRenderedFilterKey=filterKey;
+    }
+  }catch(err){if(requestVersion===newsRequestVersion&&!silent){showNotice(err.message);$('newsGrid').innerHTML='<div class="empty-state"><h3>Could not load stories</h3><p>Check that the FastAPI server is running.</p></div>';}}
 }
 async function watchRegion(){
   if(state.demo)return;
@@ -83,7 +109,7 @@ async function checkLiveUpdates(){
   }catch(err){$('feedStatus').textContent='Feed status unavailable. Check backend connection.';}
 }
 function renderTopics(topics){
-  $('topicRow').innerHTML=topics.map(t=>`<button type="button" class="topic-btn ${state.topic===t?'active':''}" data-topic="${escapeHTML(t)}">${escapeHTML(t)}</button>`).join('');
+  $('topicRow').innerHTML=topics.map(t=>`<button type="button" class="topic-btn ${state.topic===t?'active':''}" data-topic="${escapeHTML(t)}">${escapeHTML(t==='All topics'?'All News':t)}</button>`).join('');
 }
 function setBusy(busy){state.busy=busy;$('refreshBtn').disabled=busy;$('refreshBtn').querySelector('span').textContent=busy?'Fetching RSS…':'Fetch live news';}
 async function refresh(){
@@ -99,41 +125,60 @@ async function refresh(){
 function openDrawer(id,which){
   const a=state.articles.find(item=>item.id===id);
   if(!a)return;
-  state.selected=a;state.research=null;
+  state.selected=a;state.research=null;state.chatCaveatShown=false;
   $('researchQuestion').value='';
   $('drawerBackdrop').hidden=false;$('drawer').hidden=false;document.body.style.overflow='hidden';
   $('drawerTitle').textContent=a.title;
   $('drawerSub').textContent=`${a.publisher} · ${a.region} · Original language: ${a.language||'Unknown'} · Responses: ${state.language} · ${relativeDate(a.published_at)}`;
   $('researchOutput').textContent=a.is_demo?'This is an invented learning scenario. Real research is only available for live RSS articles.':'Select “Start research” to search for related coverage and build an evidence index. The configured Groq or Ollama model can generate a cited brief.';
   $('sourceList').innerHTML='';
-  $('chatMessages').innerHTML='<div class="assistant-bubble">Ask a question about this headline. Without an AI provider, I can show relevant source references; I will not invent an answer from incomplete RSS snippets.</div>';
+  $('chatMessages').innerHTML='<div class="assistant-bubble">Hi! What would you like to know about this article?</div>';
   selectDrawerTab(which);
+  loadArticleChatHistory(a.id, ++state.chatHistoryVersion);
 }
-function closeDrawer(){$('drawer').hidden=true;$('drawerBackdrop').hidden=true;document.body.style.overflow='';}
+
+function closeDrawer(){state.contextFetchVersion++;$('drawer').hidden=true;$('drawerBackdrop').hidden=true;document.body.style.overflow='';}
 function selectDrawerTab(which){
   const research=which==='research';
   $('researchPanel').hidden=!research;$('chatPanel').hidden=research;
   $('researchTab').classList.toggle('active',research);$('chatTab').classList.toggle('active',!research);
   $('drawerTopic').textContent=research?'RESEARCH REPORT':'ARTICLE CHAT';
-  if(!research)$('chatInput').focus();
+  if(!research){$('chatInput').focus();if(state.selected)beginArticlePreparation(state.selected.id);}
+}
+function locationLabel(item){
+  return item.region==='All India' && item.region_confidence==='not_verified'
+    ? 'Geographic location not verified'
+    : (item.region||'Region not labelled');
 }
 function renderSources(sources){
   if(!sources?.length)return '<p class="drawer-sub">No additional live sources were available for verification.</p>';
-  return `<div class="source-heading">EVIDENCE SOURCES / ${sources.length}</div>${sources.map(s=>`<article class="source-row" id="evidence-src-${Number(s.index)}"><strong>[${s.index}] ${escapeHTML(s.title)}</strong><p>${escapeHTML(s.publisher)} · ${escapeHTML(s.region)} · ${escapeHTML(relativeDate(s.published_at))} · ${escapeHTML(s.feed_origin==='direct_publisher_rss'?'Direct publisher RSS':s.feed_origin==='google_news_rss'?'Google News RSS':s.feed_origin==='bbc_publisher_rss'?'BBC RSS':'Feed origin unclassified')}</p>${allowedLink(s.url)?`<a href="${escapeHTML(s.url)}" target="_blank" rel="noopener noreferrer">Inspect publisher/source ↗</a>`:'Demo source — no external link'}</article>`).join('')}`;
+  return `<div class="source-heading">EVIDENCE SOURCES / ${sources.length}</div>${sources.map(s=>`<article class="source-row" id="evidence-src-${Number(s.index)}"><strong>[${s.index}] ${escapeHTML(s.title)}</strong><p>${escapeHTML(s.publisher)} · ${escapeHTML(locationLabel(s))} (${escapeHTML(s.region_confidence||"unverified")}) · ${escapeHTML(relativeDate(s.published_at))} · ${escapeHTML(s.feed_origin==='direct_publisher_rss'?'Direct publisher RSS':s.feed_origin==='google_news_rss'?'Google News RSS':s.feed_origin==='bbc_publisher_rss'?'BBC RSS':'Feed origin unclassified')}</p>${allowedLink(s.url)?`<a href="${escapeHTML(s.url)}" target="_blank" rel="noopener noreferrer">Inspect publisher/source ↗</a>`:'Demo source — no external link'}</article>`).join('')}`;
 }
 function renderResearchReport(data){
   const report = data.report || {};
   const items = (Array.isArray(report.findings)?report.findings:[]);
   const findings = items.length ? items.map((finding, idx)=>{
     const links = (finding.evidence||[]).map(e=>`<a class="evidence-tag" href="#evidence-src-${Number(e.source)}">[${Number(e.source)}]</a>`).join(' ');
-    const quotes = (finding.evidence||[]).map(e=>`<blockquote class="quote-evidence">“${escapeHTML(e.quote)}” <span>Source ${Number(e.source)} · RSS excerpt/headline</span></blockquote>`).join('');
-    return `<div class="research-finding"><strong>Finding ${idx+1}</strong><p>${escapeHTML(finding.claim)} ${links}</p>${quotes}</div>`;
+    const quotes = (finding.evidence||[]).map(e=>`<blockquote class="quote-evidence">“${escapeHTML(e.quote)}” <span>Source ${Number(e.source)} · ${data.sources?.[Number(e.source)-1]?.evidence_origin==='publisher_article'?'accessible publisher text':'RSS excerpt/headline'}</span></blockquote>`).join('');
+    return `<div class="research-finding"><strong>Finding ${idx+1} · ${escapeHTML(String(finding.status||"attributed RSS report").replaceAll("_", " "))}</strong><p>${escapeHTML(finding.claim)} ${links}</p>${quotes}</div>`;
   }).join('') : '<p class="research-empty">Not enough excerpt-backed evidence to produce a supported research finding. Review the source headlines below.</p>';
   const timeline = (report.publication_timeline||[]).map(item=>`<li><a href="#evidence-src-${Number(item.source)}">[${Number(item.source)}]</a> ${escapeHTML(item.published_at)}</li>`).join('');
   const limitations = (report.not_verified||[]).map(item=>`<li>${escapeHTML(item)}</li>`).join('');
   const questions = (report.open_questions||[]).map(item=>`<li>${escapeHTML(item)}</li>`).join('');
-  const badge = ['groq','ollama'].includes(data.generated_by) ? `AI DRAFT · ${escapeHTML(data.generated_by.toUpperCase())} · EXCERPT-ANCHORED` : 'EVIDENCE INDEX · NO APPROVED AI FINDINGS';
+  const badge = ['groq','ollama'].includes(data.generated_by) ? `AI DRAFT · ${escapeHTML(data.generated_by.toUpperCase())} · SOURCE-ANCHORED` : 'EVIDENCE INDEX · NO APPROVED AI FINDINGS';
   const dropNote = Number(report.rejected_claims||0)>0 ? `<p class="research-muted">${Number(report.rejected_claims)} draft claim(s) excluded by quotation, numeric or semantic review checks.</p>` : '';
+  const disputes = (report.reported_disputes||[]).map(item=>`<blockquote>${escapeHTML(item.quote)} [${Number(item.source)}]</blockquote>`).join('');
+  const summary = (disputes?`<section><h3>Disputed statements in the sources</h3>${disputes}</section>`:'') + (report.key_takeaway ? `<div class="report-section"><h3>Evidence-based research summary</h3><p>${escapeHTML(report.key_takeaway)}</p><p class="research-muted">Source statements below are attributed publisher reporting, not independent confirmation.</p></div>` : '');
+  const focus = (Array.isArray(report.research_focus)?report.research_focus:[]);
+  const researchFocus = focus.length ? `<div class="report-section"><h3>Answers to the requested research topics</h3><p class="research-muted">A relevant phrase in a source is not, by itself, proof that the question is fully answered.</p><ul>${focus.map(item => `<li><strong>${escapeHTML(item.label)}:</strong> ${item.status==='mentioned_in_rss' ? `Mentioned in source(s) ${(item.sources||[]).map(n=>`<a href="#evidence-src-${Number(n)}">[${Number(n)}]</a>`).join(' ')}` : 'Not established by indexed reporting'}<span class="research-muted"> — ${escapeHTML(item.note||'')}</span></li>`).join('')}</ul></div>` : '';
+  const highlights = (Array.isArray(report.source_highlights)?report.source_highlights:[]);
+  const additionalReporting = highlights.length ? `<div class="report-section"><h3>Additional potentially matching reporting</h3><p class="research-muted">Statements attributed to the indexed publishers.</p>${highlights.map(s=>`<div class="comparison-item"><strong><a href="#evidence-src-${Number(s.source)}">[${Number(s.source)}]</a> ${escapeHTML(s.publisher)}</strong><p>“${escapeHTML(s.headline)}”</p>${s.excerpt?`<blockquote>${escapeHTML(s.excerpt)}</blockquote>`:''}<small>Relationship: ${escapeHTML(s.relationship)}</small></div>`).join('')}</div>` : '';
+  const comparisons=(Array.isArray(report.source_comparison)?report.source_comparison:[]);
+  const detailCount=comparisons.filter(x=>x.detail_level==='excerpt_available').length;
+  const articleCount=comparisons.filter(x=>x.detail_level==='publisher_article').length;
+  const sourceComparison = comparisons.length ? `<div class="report-section source-comparison"><h3>Source-by-source reporting index</h3>
+    <p class="research-muted">${comparisons.length} indexed sources; ${articleCount} include accessible publisher text; ${detailCount} contain RSS excerpt context. Publisher reporting is not independent verification.</p>
+    ${comparisons.map(item=>`<div class="comparison-item"><div class="comparison-head"><strong><a href="#evidence-src-${Number(item.index)}">[${Number(item.index)}]</a> ${escapeHTML(item.publisher)}</strong><small>${item.detail_level==='publisher_article'?'Accessible publisher article':item.detail_level==='headline_only'?'Headline only':'Headline + RSS excerpt'} · ${escapeHTML(item.relationship==='selected_story'?'Selected story':item.relationship==='possible_same_story'?'Possible same story · not verified':'Related topic · same incident not established')}</small></div><p>${escapeHTML(item.headline)}</p>${item.excerpt?`<blockquote>${escapeHTML(item.excerpt)}</blockquote>`:'<small>No additional detail supplied by the indexed RSS entry.</small>'}</div>`).join('')}</div>` : '';
   const workflow = data.workflow || {};
   const nodes = (Array.isArray(workflow.trace) ? workflow.trace : []).map(step =>
     `<li class="agent-step"><span class="agent-dot ${step.status==='completed'?'ok':step.status==='degraded'?'warn':'skip'}"></span><div><strong>${escapeHTML(step.agent)}</strong><small>${escapeHTML(step.status)} · ${escapeHTML(step.detail)}</small></div></li>`).join('');
@@ -145,16 +190,16 @@ function renderResearchReport(data){
   const amounts=(coverage.reported_numbers||[]).map(entry=>
     `<li><a href="#evidence-src-${Number(entry.source)}">[${Number(entry.source)}]</a> <strong>${escapeHTML(entry.value)}</strong> <span>— ${escapeHTML(entry.context)}</span></li>`).join('');
   const coveragePanel=(coverage.source_count!==undefined) ? `<div class="report-section coverage-panel">
-    <h3>Coverage and numerical claims · RSS metadata only</h3>
+    <h3>Coverage and reported figures · indexed source evidence</h3>
     <p class="research-muted">${Number(coverage.source_count||0)} indexed entries · ${Number(coverage.publisher_label_count||0)} publisher labels. Distinct labels do not prove independent reporting.</p>
     <h4>Possible headline overlap</h4>${headlineGroups?`<ul>${headlineGroups}</ul>`:'<p class="research-muted">No strong headline overlap found in this limited evidence set; syndication remains possible.</p>'}
-    <h4>Numerical details appearing in sources</h4>${amounts?`<ul class="quantity-list">${amounts}</ul>`:'<p class="research-muted">No qualifying numeric amounts in the indexed RSS text.</p>'}
-    <p class="research-muted">Amounts are quoted from RSS text and have not been verified or reconciled against primary documents.</p>
+    <h4>Numerical details appearing in sources</h4>${amounts?`<ul class="quantity-list">${amounts}</ul>`:'<p class="research-muted">No qualifying numeric figures with supported units in the indexed RSS text.</p>'}
+    <p class="research-muted">Figures are quoted from source text and have not been verified or reconciled against primary documents.</p>
   </div>` : '';
 
 
   return `<div class="research-badge">${badge}</div>
-    ${agentTrace}${coveragePanel}<div class="report-section"><h3>What available sources report</h3>${findings}${dropNote}</div>
+    ${agentTrace}${summary}${researchFocus}<div class="report-section"><h3>AI-reviewed findings</h3>${findings}${dropNote}</div>${additionalReporting}${sourceComparison}${coveragePanel}
     <div class="report-section"><h3>Publication timeline (UTC)</h3><p class="research-muted">These are reported feed publication timestamps, <strong>not the dates or times of the underlying events.</strong></p><ol>${timeline}</ol></div>
     <div class="report-section"><h3>What is not verified</h3><ul>${limitations}</ul></div>
     <div class="report-section"><h3>Questions for further reporting</h3><ul>${questions}</ul></div>
@@ -162,51 +207,153 @@ function renderResearchReport(data){
 }
 async function runResearch(){
   if(!state.selected)return;
+  const article={...state.selected};
   $('researchRun').disabled=true;
   $('researchOutput').classList.remove('report-structured');
   $('researchOutput').textContent='Running LangGraph: planning, RSS discovery, retrieval, source-quoted synthesis and semantic review…';
   try{
-    const result=await request(`/api/research/${encodeURIComponent(state.selected.id)}`,{method:'POST',body:JSON.stringify({language:state.language,question:$('researchQuestion').value.trim()})});
+    const result=await request(`/api/research/${encodeURIComponent(article.id)}`,{method:'POST',body:JSON.stringify({language:state.language,question:$('researchQuestion').value.trim()})});
+    if(!state.selected || state.selected.id!==article.id)return;
     $('sourceList').innerHTML=renderSources(result.sources);
     $('researchOutput').classList.add('report-structured');
     $('researchOutput').innerHTML=renderResearchReport(result);
+    const destination=$('researchShowcaseResult');
+    if(destination){destination.innerHTML=renderResearchReport(result);const status=$('researchShowcaseStatus');status.textContent=`Research completed for: ${article.title}. Review source quotations and limitations below.`;}
+    const ref=$('reportReference'),head=$('reportHeadline'),sub=$('reportSubtitle');
+    if(ref)ref.textContent=`Article ${article.id}`;
+    if(head)head.textContent=article.title;
+    if(sub)sub.textContent=`${article.publisher} · ${locationLabel(article)} · ${relativeDate(article.published_at)} · ${result.report?.evidence_depth?.publisher_articles?'Includes publisher passages':'RSS evidence only'}`;
+    const evidence=$('reportEvidenceSources');if(evidence)evidence.innerHTML=renderSources(result.sources);
+    const evidenceHead=$('reportEvidenceHeading');if(evidenceHead)evidenceHead.textContent=`Cited evidence sources (${(result.sources||[]).length})`;
+    const print=$('printReport');if(print)print.disabled=false;
+    closeDrawer();setActiveScreen('research-showcase');
+
   }catch(err){
     $('researchOutput').classList.remove('report-structured');
     $('researchOutput').textContent='Research could not complete: '+err.message;
   }finally{$('researchRun').disabled=false;}
 }
 
+async function loadArticleChatHistory(articleId,version){
+  // The server reads a first-party, HttpOnly session cookie. No session token
+  // is exposed to JavaScript, localStorage, or the rendered answer.
+  try{
+    const result=await request(`/api/chat/history?article_id=${encodeURIComponent(articleId)}`);
+    if(version!==state.chatHistoryVersion || state.selected?.id!==articleId)return;
+    // Do not interleave delayed saved-history fetches with new messages.
+    if($('chatMessages').querySelector('.user-bubble'))return;
+    for(const turn of result.turns||[]){
+      appendChat(turn.question,'user');
+      appendChat(turn.answer,'assistant');
+    }
+    const action=document.createElement('button');
+    action.type='button';action.className='chat-clear-history';
+    action.textContent='Clear this article conversation';
+    action.addEventListener('click',async()=>{
+      try{
+        await request('/api/chat/clear',{method:'POST',body:JSON.stringify({article_id:articleId})});
+        if(state.selected?.id===articleId){
+          state.chatHistoryVersion++;
+          $('chatMessages').innerHTML='<div class="assistant-bubble">Conversation cleared for this article. Ask a new question.</div>';
+          $('chatMessages').append(action);
+        }
+      }catch(err){showNotice(`Unable to clear chat: ${err.message}`);}
+    });
+    $('chatMessages').append(action);
+  }catch(err){
+    // News Q&A remains usable even if the optional history endpoint fails.
+  }
+}
+
+function articleEvidenceStatusLabel(payload){
+  if(payload?.status==='ready')return payload.provenance==='publisher_syndicated_feed'?'Article evidence ready · publisher feed':'Article evidence ready · publisher page';
+  const reason=String(payload?.failure_code||'');
+  const labels={
+    publisher_dns_unavailable:'RSS evidence only · publisher DNS unavailable',
+    robots_policy_unavailable:'RSS evidence only · publisher reading policy unavailable',
+    publisher_url_not_resolved:'RSS evidence only · original publisher link not resolved',
+    publisher_access_not_permitted:'RSS evidence only · publisher does not permit automated reading',
+    publisher_access_restricted:'RSS evidence only · publisher access restricted',
+    insufficient_accessible_text:'RSS evidence only · readable article body unavailable',
+    publisher_story_mismatch:'RSS evidence only · retrieved page did not match article',
+    publisher_domain_mismatch:'RSS evidence only · destination was a different publisher',
+    source_url_not_permitted:'RSS evidence only · source URL not approved',
+  };
+  return labels[reason]||(reason?'RSS evidence only · '+reason.replaceAll('_',' '):'RSS evidence only');
+}
+async function beginArticlePreparation(articleId){
+  const version=++state.contextFetchVersion;
+  if(!state.selected || state.selected.id!==articleId || state.selected.is_demo)return;
+  const initial=$('chatContextStatus');
+  if(initial)initial.textContent='Reading source in the background…';
+  try{
+    const first=await request(`/api/article-context/${encodeURIComponent(articleId)}/prepare`,{method:'POST'});
+    if(version!==state.contextFetchVersion || state.selected?.id!==articleId)return;
+    if(first.status==='ready' || first.status==='limited'){
+      if(initial)initial.textContent=articleEvidenceStatusLabel(first);
+      return;
+    }
+    for(let i=0;i<18;i++){
+      await new Promise(resolve=>setTimeout(resolve,1500));
+      if(version!==state.contextFetchVersion || state.selected?.id!==articleId)return;
+      const data=await request(`/api/article-context/${encodeURIComponent(articleId)}`);
+      if(data.status!=='loading' && data.status!=='not_started'){
+        if(initial)initial.textContent=articleEvidenceStatusLabel(data);
+        return;
+      }
+    }
+    if(initial)initial.textContent='Preparing article evidence; questions can still be submitted';
+  }catch(err){
+    if(version===state.contextFetchVersion && initial)initial.textContent='Article preload unavailable · RSS fallback';
+  }
+}
 function appendChat(text,type){const div=document.createElement('div');div.className=type==='user'?'user-bubble':'assistant-bubble';div.textContent=text;$('chatMessages').append(div);$('chatMessages').scrollTop=$('chatMessages').scrollHeight;return div;}
 async function submitChat(event){
   event.preventDefault();if(!state.selected)return;
   const input=$('chatInput'),question=input.value.trim();if(question.length<2)return;
-  input.value='';appendChat(question,'user');const bubble=appendChat('Checking available sources…','assistant');
+  const articleId=state.selected.id;
+  input.value='';appendChat(question,'user');const bubble=appendChat('Checking prepared article evidence…','assistant');
   const submit=$('chatForm').querySelector('button');submit.disabled=true;
   try{
-    const data=await request('/api/chat',{method:'POST',body:JSON.stringify({article_id:state.selected.id,question,language:state.language})});
-    const isDraft=['groq','ollama'].includes(data.generated_by) && data.claims?.length;
-    bubble.textContent=(isDraft?'AI DRAFT · CLAIMS REVIEWED AGAINST RSS EXCERPTS\n\n':'INSUFFICIENT SOURCE EVIDENCE / AI UNAVAILABLE\n\n')+data.answer;
-    if(isDraft){
+    const data=await request('/api/chat',{method:'POST',body:JSON.stringify({article_id:articleId,question,language:state.language})});
+    if(!state.selected || state.selected.id!==articleId){bubble.remove();return;}
+    const hasReviewedClaims=Array.isArray(data.claims)&&data.claims.length>0;
+    const titles={source_passage:'RELEVANT SOURCE PASSAGE',source_metadata:'PUBLICATION DETAILS',general_ai:'GENERAL KNOWLEDGE · AI EXPLANATION',general_reference:'GENERAL KNOWLEDGE · DEFINITION',mixed_ai:'GENERAL BACKGROUND + ARTICLE EVIDENCE',
+      source_summary:'RSS-LEVEL SUMMARY · NOT FULL ARTICLE',source_evidence:'WHAT INDEXED RSS SOURCES ACTUALLY SAY',
+      source_overview:'MULTI-SOURCE RSS REPORTING · NOT INDEPENDENT VERIFICATION',
+      source_source_list:'INDEXED PUBLISHERS · SOURCE ATTRIBUTION',source_later_events:'LATER DEVELOPMENTS · NOT ESTABLISHED',
+      insufficient_evidence:'AVAILABLE EVIDENCE · ANSWER NOT ESTABLISHED',
+      source_index:'SOURCE INDEX · AI PROVIDER NOT CONFIGURED',
+      ai_unavailable:'AI PROVIDER UNAVAILABLE · SOURCE DETAILS ONLY',
+      groq:'ARTICLE AI DRAFT · CLAIMS REVIEWED',ollama:'ARTICLE AI DRAFT · CLAIMS REVIEWED'};
+    const title=data.evidence_status==='publisher_article'?'PUBLISHER ARTICLE EVIDENCE':titles[data.generated_by]||'SOURCE-LIMITED ANSWER';
+    bubble.textContent=`${title}\n\n${data.answer}`;
+    if(hasReviewedClaims){
       for(const claim of data.claims){
         const detail=document.createElement('div');detail.className='chat-evidence';
-        const heading=document.createElement('strong');heading.textContent=`RSS source [${claim.source}] · exact supporting excerpt`;
+        const heading=document.createElement('strong');heading.textContent=`Source [${claim.source}] · exact supporting ${data.sources?.find(s=>Number(s.index)===Number(claim.source))?.evidence_origin==='publisher_article'?'publisher article passage':'RSS excerpt'}`;
         const excerpt=document.createElement('blockquote');excerpt.textContent=claim.quote;
         detail.append(heading,excerpt);bubble.append(detail);
       }
     }
     if(data.sources?.length){
       const heading=document.createElement('p');heading.className='chat-evidence-note';
-      heading.textContent=isDraft?'Cited source links:':'Related source links (not proof of the requested answer):';bubble.append(heading);
+      heading.textContent=(hasReviewedClaims||['source_summary','source_evidence','source_overview','source_source_list','source_later_events','general_reference','mixed_ai'].includes(data.generated_by))?
+        'Indexed reporting links (not independent verification):':'Related reporting links (not proof of the requested answer):';bubble.append(heading);
       for(const src of data.sources){
         if(!allowedLink(src.url))continue;
         const link=document.createElement('a');link.href=src.url;link.target='_blank';link.rel='noopener noreferrer';
-        link.className='chat-evidence-link';link.textContent=`[${src.index}] ${src.publisher} · Open original source ↗`;
+        const throughGoogle=/^https:\/\/news\.google\.com\//i.test(src.url);
+        link.className='chat-evidence-link';
+        link.textContent=`[${src.index}] ${src.publisher} · ${throughGoogle?'Open Google News RSS link':'Open publisher/source link'} ↗`;
         bubble.append(link);
       }
     }
-    const note=document.createElement('p');note.className='chat-evidence-note';
-    note.textContent=data.caveat||'RSS excerpts are not independently fact checked. Check publisher articles.';
-    bubble.append(note);
+    // One disclaimer per open article conversation, not repeated under every reply.
+    if(!state.chatCaveatShown && data.caveat){
+      const note=document.createElement('p');note.className='chat-evidence-note';
+      note.textContent=data.caveat;bubble.append(note);state.chatCaveatShown=true;
+    }
   }catch(err){bubble.textContent='Request failed: '+err.message;}
   finally{submit.disabled=false;$('chatMessages').scrollTop=$('chatMessages').scrollHeight;}
 }
@@ -225,6 +372,13 @@ function syncWeatherMapToCity({focus=true}={}){
   if(!place)return;
   const status=$('weatherMapSelection');
   if(status)status.textContent=`Selected: ${place.city} · ${place.region}`;
+  const fallbackMarker=$('fallbackCityMarker');
+  if(fallbackMarker){
+    const temp=weatherState.forecast?.city===place.city?weatherState.forecast.current?.temperature_c:null;
+    fallbackMarker.textContent=`${place.city} · ${mapTemperature(temp)}`;
+    fallbackMarker.style.left=`${Math.max(5,Math.min(91,(Number(place.longitude)-66)/34*100))}%`;
+    fallbackMarker.style.top=`${Math.max(12,Math.min(78,(39-Number(place.latitude))/34*100))}%`;
+  }
   const map=weatherState.map;
   if(!map)return; // A lazy-loaded map will catch up when it initializes.
   const coords=[place.latitude,place.longitude];
@@ -312,7 +466,7 @@ async function loadWeatherNews(region){
 async function showWeatherMap(){
   if(weatherState.mapLoaded)return;
   weatherState.mapLoaded=true;
-  if(typeof window.L==='undefined'){$('weatherMapFallback').hidden=false;return;}
+  if(typeof window.L==='undefined'){$('weatherMapFallback').hidden=false;$('weatherMap').closest('.weather-map-panel')?.classList.add('offline-map');syncWeatherMapToCity({focus:false});return;}
   const L=window.L;
   weatherState.map=L.map('weatherMap',{scrollWheelZoom:false}).setView([22.5,79.0],5);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
@@ -336,6 +490,7 @@ async function showWeatherMap(){
     syncWeatherMapToCity({focus:false}); // Highlight the current selection after async markers load.
   }catch{
     $('weatherMapFallback').hidden=false;
+    $('weatherMap').closest('.weather-map-panel')?.classList.add('offline-map');
     $('weatherMapFallback').textContent='City temperature measurements unavailable; choose a city from the dropdown.';
   }
   setTimeout(()=>weatherState.map?.invalidateSize(),150);
@@ -373,7 +528,7 @@ async function initWeather(){
         if(item.is_demo)return;
         state.articles.push(item);
       }
-      openDrawer(id,button.hasAttribute('data-weatherChat')?'chat':'research');
+      openDrawer(id,button.hasAttribute('data-weather-chat')?'chat':'research');
     }catch(err){$('weatherNews').insertAdjacentText('beforeend',' · Could not load selected story: '+err.message);}
   });
   if('IntersectionObserver' in window){
@@ -392,6 +547,10 @@ async function init(){
     $('languageSelect').innerHTML=state.metadata.response_languages.map(l=>`<option value="${escapeHTML(l)}">${escapeHTML(l)}</option>`).join('');
     $('languageSelect').value=state.language;
     $('statAI').textContent=state.metadata.llm_configured?`${state.metadata.llm_provider.toUpperCase()} SETUP`:'SOURCE MODE';
+    const headerAi=$('headerAiCheckBtn');
+    const publicOff=state.metadata.public_demo&&!state.metadata.public_ai_enabled;
+    headerAi.textContent=publicOff?'AI OFF · PUBLIC DEMO':state.metadata.llm_configured?'Test AI connection':'AI NOT CONFIGURED';
+    headerAi.disabled=publicOff||!state.metadata.llm_configured;
     $('aiNote').textContent=state.metadata.llm_configured?`Model: ${state.metadata.llm_model} (check connection via /api/ai/check)`:'Configure Groq or Ollama to enable AI';
   }catch(err){showNotice('Backend not responding: '+err.message);}
   $('aiCheckBtn').addEventListener('click',async()=>{
@@ -399,16 +558,21 @@ async function init(){
     try{
       const result=await request('/api/ai/check',{method:'POST'});
       $('statAI').textContent=`${result.provider.toUpperCase()} READY`;
+      $('headerAiCheckBtn').textContent=`${result.provider.toUpperCase()} READY`;
       $('aiNote').textContent=`Connected to ${result.model}`;
     }catch(err){
       $('statAI').textContent='AI UNAVAILABLE';
+      $('headerAiCheckBtn').textContent='AI UNAVAILABLE';
       $('aiNote').textContent=err.message;
     }finally{btn.disabled=false;btn.textContent='Test AI connection';}
   });
+  $('headerAiCheckBtn').addEventListener('click',()=>$('aiCheckBtn').click());
   $('regionSelect').addEventListener('change',e=>{state.region=e.target.value;state.lastFeedSuccess=null;loadNews();if(!state.demo){watchRegion();checkLiveUpdates();}});
   $('languageSelect').addEventListener('change',e=>{state.language=e.target.value;if(state.selected){$('drawerSub').textContent=`${state.selected.publisher} · ${state.selected.region} · Original language: ${state.selected.language||'Unknown'} · Responses: ${state.language}`;}});
   $('searchInput').addEventListener('input',e=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{state.q=e.target.value.trim();loadNews();},230);});
-  $('topicRow').addEventListener('click',e=>{const b=e.target.closest('[data-topic]');if(!b)return;state.topic=b.dataset.topic;renderTopics(state.metadata.topics);loadNews();});
+  $('topicRow').addEventListener('click',e=>{const b=e.target.closest('[data-topic]');if(!b)return;state.topic=b.dataset.topic;renderTopics(state.metadata?.topics||['All topics']);loadNews();});
+  $('clearFiltersBtn').addEventListener('click',resetNewsFilters);
+  $('newsGrid').addEventListener('click',e=>{if(e.target.closest('#clearEmptyFilters'))resetNewsFilters();});
   $('liveBtn').addEventListener('click',()=>setMode(false));$('demoBtn').addEventListener('click',()=>setMode(true));
   $('refreshBtn').addEventListener('click',refresh);
   $('newsGrid').addEventListener('click',e=>{const b=e.target.closest('[data-research],[data-chat]');if(!b)return;openDrawer(b.dataset.research||b.dataset.chat,b.hasAttribute('data-chat')?'chat':'research');});
@@ -417,12 +581,30 @@ async function init(){
   $('researchTab').addEventListener('click',()=>selectDrawerTab('research'));
   $('chatTab').addEventListener('click',()=>selectDrawerTab('chat'));
   $('researchRun').addEventListener('click',runResearch);$('chatForm').addEventListener('submit',submitChat);
-  document.querySelectorAll('[data-nav]').forEach(a=>a.addEventListener('click',()=>{document.querySelectorAll('[data-nav]').forEach(n=>n.classList.remove('active'));a.classList.add('active');}));
+  document.querySelectorAll('[data-nav]').forEach(a=>a.addEventListener('click',()=>setActiveScreen(a.dataset.nav)));
+  window.addEventListener('hashchange',()=>setActiveScreen(screenFromHash(),false));
+  $('printReport')?.addEventListener('click',()=>window.print());
+  setActiveScreen(screenFromHash(),false);
   // Opening the page immediately asks the server to check freshness and,
   // if due, start a non-blocking RSS retrieval. Cached items appear at once.
   setMode(false);
   initWeather();
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkLiveUpdates();});
   window.setInterval(checkLiveUpdates,20000); // UI sync, distinct from 5-minute RSS polling.
+}
+function screenFromHash(){
+  const id=(location.hash||'#explorer').slice(1);
+  return ['explorer','research-showcase','weather','regional-coverage'].includes(id) ? id : 'explorer';
+}
+function setActiveScreen(screen, updateHash=true){
+  if(!['explorer','research-showcase','weather','regional-coverage'].includes(screen))screen='explorer';
+  document.body.dataset.screen=screen;
+  document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('active',a.dataset.nav===screen));
+  if(updateHash&&location.hash!==`#${screen}`)history.replaceState(null,'',`#${screen}`);
+  window.scrollTo(0,0);
+  if(screen==='weather'){
+    if(typeof showWeatherMap==='function')showWeatherMap();
+    setTimeout(()=>weatherState.map?.invalidateSize(),200);
+  }
 }
 window.addEventListener('DOMContentLoaded',init);

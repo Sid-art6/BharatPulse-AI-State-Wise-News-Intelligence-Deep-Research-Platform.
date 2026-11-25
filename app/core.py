@@ -25,6 +25,7 @@ import httpx
 from .regions import REGIONS, TOPICS, REGION_RSS_LANG, REGION_LOCAL_ALIASES, classify_topic, infer_region, detect_language
 from .regional_sources_v10 import feeds_for_region
 from .coverage_v10 import headline_overlap, title_tokens
+from .evidence_utils import has_meaningful_excerpt
 
 BASE = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.getenv("BHARATPULSE_DATA_DIR", str(BASE / "data")))
@@ -115,6 +116,11 @@ def init_db() -> None:
             UNIQUE(fingerprint, is_demo)
         );
         CREATE INDEX IF NOT EXISTS idx_article_region ON articles(region, is_demo, published_at);
+        CREATE TABLE IF NOT EXISTS publisher_links (
+            fingerprint TEXT NOT NULL, publisher TEXT NOT NULL, url TEXT NOT NULL,
+            title TEXT NOT NULL, seen_at TEXT NOT NULL,
+            PRIMARY KEY(fingerprint,publisher)
+        );
         CREATE TABLE IF NOT EXISTS rejected_headlines (
             fingerprint TEXT PRIMARY KEY,
             checked_at TEXT NOT NULL
@@ -191,7 +197,13 @@ def parse_rss(xml_bytes: bytes, region: str, provider: str = "Google News", *,
             publisher = title.rsplit(" - ", 1)[-1][:100]
         if title.endswith(" - " + publisher):
             title = title[: -len(" - " + publisher)]
-        description = strip_html(item.findtext("description", default=""))
+        raw_description = item.findtext("description", default="")
+        # Google clusters can list several other headlines inside a single
+        # description. They are separate sources with different attribution.
+        cluster = not direct_publisher and re.search(r"<(?:ol|ul|li)\b", raw_description, re.I)
+        description = "" if cluster else strip_html(raw_description)
+        if not has_meaningful_excerpt(title, description, publisher):
+            description = ""
         article_region, region_confidence = infer_region(title + " " + description, region)
         # A publisher's explicitly named state/city section is useful but
         # weaker evidence than an article explicitly mentioning a state.
@@ -292,6 +304,17 @@ def unseen_articles(articles: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     if not articles:
         return []
+    # A direct-feed duplicate can resolve an already accepted Google record.
+    # Store only the link, separately from the screened dashboard records.
+    direct = [a for a in articles if a.get("feed_origin") in
+              {"direct_publisher_rss", "bbc_publisher_rss"} and not a.get("is_demo")]
+    if direct:
+        with db_conn() as conn:
+            conn.executemany("""INSERT OR REPLACE INTO publisher_links
+                VALUES (?,?,?,?,?)""", [(a["fingerprint"], a["publisher"].casefold(),
+                a["url"], a["title"], utcnow()) for a in direct])
+            conn.execute("DELETE FROM publisher_links WHERE seen_at < ?", (
+                (datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),))
     fingerprints = list(dict.fromkeys(a["fingerprint"] for a in articles))
     known: set[str] = set()
     with db_conn() as conn:
@@ -308,7 +331,9 @@ def unseen_articles(articles: list[dict[str, Any]]) -> list[dict[str, Any]]:
             known.update(r[0] for r in rejected)
     fresh: list[dict[str, Any]] = []
     seen = set(known)
-    for a in articles:
+    # Choose a direct feed as the displayed source when both arrive together.
+    for a in sorted(articles, key=lambda row: row.get("feed_origin") not in
+                    {"direct_publisher_rss", "bbc_publisher_rss"}):
         if a["fingerprint"] not in seen:
             seen.add(a["fingerprint"])
             fresh.append(a)
@@ -361,16 +386,49 @@ def list_articles(region: str = "All India", topic: str = "All topics", search: 
     if topic != "All topics":
         where.append("topic = ?")
         params.append(topic)
-    if search:
-        where.append("(title LIKE ? OR description LIKE ? OR publisher LIKE ?)")
-        term = "%" + search[:100].replace("%", "\\%").replace("_", "\\_") + "%"
-        # LIKE escape is explicit, so search text is not a wildcard.
-        where[-1] = "(title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR publisher LIKE ? ESCAPE '\\')"
-        params.extend([term] * 3)
+    # Search each word independently across headline, excerpt, publisher, topic
+    # and region; a phrase such as "Bengaluru infrastructure" should match
+    # records containing both terms in different indexed fields.
+    # Use parameterised LIKE with explicit escaping to block wildcard injection.
+    terms = [term for term in search[:120].strip().split() if term][:6]
+    for token in terms:
+        escaped = token.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        where.append("(" + " OR ".join(f"{column} LIKE ? ESCAPE '\\'" for column in
+                     ("title", "description", "publisher", "topic", "region")) + ")")
+        params.extend([f"%{escaped}%"] * 5)
     params.append(min(max(limit, 1), 100))
     sql = f"SELECT * FROM articles WHERE {' AND '.join(where)} ORDER BY published_at DESC LIMIT ?"
     with db_conn() as conn:
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+
+def candidate_articles(selected: dict[str, Any], limit: int = 300) -> list[dict[str, Any]]:
+    """Bounded incident candidates beyond the dashboard's newest 100 rows.
+
+    Uses escaped, parameterised SQL matching. It provides candidates ONLY;
+    find_related still decides relevance and never claims corroboration.
+    """
+    title = str(selected.get("title") or "")
+    stop = {"the", "and", "for", "from", "with", "news", "india", "state", "latest", "government", "minister", "reports", "report", "said", "says"}
+    words = sorted((w for w in title_tokens(title) if len(w) >= 4 and w not in stop), key=lambda w: (-len(w), w))[:4]
+    if not words:
+        return []
+    where = []
+    params: list[Any] = []
+    for word in words:
+        token = word.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        where.append("(title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR summary_en LIKE ? ESCAPE '\\')")
+        params.extend([f"%{token}%"] * 3)
+    params.append(max(1, min(limit, 300)))
+    sql = ("SELECT * FROM articles WHERE is_demo=0 AND (" + " OR ".join(where) + ") "
+           "ORDER BY published_at DESC LIMIT ?")
+    try:
+        with db_conn() as conn:
+            return [dict(row) for row in conn.execute(sql, params).fetchall()]
+    except sqlite3.OperationalError:
+        # An uninitialised optional cache is not a reason to fail research.
+        return []
 
 
 def get_article(article_id: str) -> dict[str, Any] | None:
@@ -444,9 +502,15 @@ def find_related(article: dict[str, Any], candidate_articles: list[dict[str, Any
         "panel", "committee", "meeting", "government", "minister", "state",
         "court", "says", "said", "latest", "announces", "announced",
     }
+    weak_only_tokens.update("high supreme refuses refuse quash quashing criminal proceedings petition petitions probe case cases ruling hearing investigation against filed files police bank accused alleges orders orders seeks plea rejects demand demands leader leaders launches launch programme council opens approves announces district initiative review reviews local".split())
+    def proper_names(headline):
+        names = set(re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b", headline))
+        return {name for name in names if title_tokens(name) - weak_only_tokens}
+
     matches: list[tuple[float, dict[str, Any]]] = []
     seen_ids = {article.get("id")}
     seen_fingerprints = {article.get("fingerprint")}
+    specific = selected_tokens - weak_only_tokens - {"bjp", "congress", "party", "parties", "leaders", "leader", "author", "demand", "demands", "action", "political", "opposition", "campaign", "campaigns"}
     for candidate in candidate_articles:
         if candidate.get("id") in seen_ids or candidate.get("is_demo"):
             continue
@@ -456,11 +520,12 @@ def find_related(article: dict[str, Any], candidate_articles: list[dict[str, Any
         seen_ids.add(candidate.get("id"))
         if fp:
             seen_fingerprints.add(fp)
-        shared_title_tokens = selected_tokens & title_tokens(candidate.get("title", ""))
-        # A single topical word (e.g. "fuel") can link paraphrased reports.
-        # A shared place name or generic news word alone is not enough: that
-        # would make unrelated regional headlines appear to corroborate each other.
-        if selected_tokens and not (shared_title_tokens - weak_only_tokens):
+        # v1 QA: distinctive story/entity tokens, not generic political overlap
+        # Prefer literal story entities in headline OR excerpt. The retrieved
+        # snippet is still unverified reporting, not independent confirmation.
+        candidate_text = (candidate.get("title") or "") + " " + (candidate.get("description") or "")
+        distinctive_shared = specific & title_tokens(candidate_text)
+        if selected_tokens and not distinctive_shared:
             continue
         relevance = relevance_score(article["title"], candidate.get("title", "") + " " + candidate.get("description", ""))
         if relevance < 0.17:
@@ -482,5 +547,22 @@ def find_related(article: dict[str, Any], candidate_articles: list[dict[str, Any
         matches.remove(best)
         score, candidate = best
         seen_publishers.add(str(candidate.get("publisher") or "").casefold())
-        selected.append({**candidate, "relevance": round(score, 2)})
+        # Relevance is not proof that another article covers the *same* event.
+        # Default to topical context unless multiple story-specific details align.
+        anchors = specific & title_tokens(candidate.get("title", ""))
+        candidate_anchors = title_tokens(candidate.get("title", "")) - weak_only_tokens
+        # Common procedural wording cannot identify a particular case. Require
+        # the overlap to account for a substantial part of BOTH headlines.
+        possible_same_story = (len(anchors) >= 2 and len(anchors) >= .55 * len(specific)
+                               and len(anchors) >= .45 * len(candidate_anchors))
+        # Different named participants in otherwise near-identical headlines
+        # are a strong conflict, especially for routine court orders.
+        first_names = proper_names(article["title"])
+        other_names = proper_names(candidate.get("title", ""))
+        conflicting = bool(first_names - other_names and other_names - first_names)
+        if conflicting:
+            possible_same_story = False
+        selected.append({**candidate, "relevance": round(score, 2),
+                         "incident_assessment": "different_incident" if conflicting else ("same_incident_candidate" if possible_same_story else "related_topic"),
+                         "relationship": "possible_same_story" if possible_same_story else "topic_context"})
     return selected

@@ -101,3 +101,5 @@
 .coverage-panel li{line-height:1.65;font-size:12px;margin-bottom:5px;overflow-wrap:anywhere}
 .coverage-panel .quantity-list{max-height:250px;overflow-y:auto;padding-right:7px}
 .coverage-panel .quantity-list span{color:#64776b}
+
+.chat-context-status{font-size:12px;color:var(--text-muted,#667085);padding:4px 12px 8px;}

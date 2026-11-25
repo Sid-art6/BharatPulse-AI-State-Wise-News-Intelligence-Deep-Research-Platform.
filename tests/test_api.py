@@ -115,7 +115,7 @@ def test_watch_on_open_schedules_live_ingestion(monkeypatch, tmp_path):
 def test_real_article_research_abstains_when_no_followup_evidence(monkeypatch, tmp_path):
     import pytest
     pytest.importorskip("langgraph")  # Actual StateGraph; no simulation.
-    from app import core
+    from app import core, ai
     monkeypatch.setattr(core, "DATA_DIR", tmp_path)
     monkeypatch.setattr(core, "DB_PATH", tmp_path / "test.db")
 
@@ -127,6 +127,18 @@ def test_real_article_research_abstains_when_no_followup_evidence(monkeypatch, t
 
     monkeypatch.setattr(core, "fetch_news", no_fetch)
     monkeypatch.setattr(core, "fetch_rss", no_followup)
+
+    # Keep this test deterministic: simulate a configured model that returns
+    # no additional research findings, without calling Groq or Ollama.
+    async def mock_llm_available():
+        return True
+
+    async def mock_llm_response(*args, **kwargs):
+        return '{"findings": [], "open_questions": []}'
+
+    monkeypatch.setattr(ai, "llm_is_configured", mock_llm_available)
+    monkeypatch.setattr(ai, "_complete", mock_llm_response)
+
     with TestClient(app) as client:
         original = core.parse_rss(b'<rss><channel><item><title>Karnataka new proposal</title>'
                                    b'<link>https://example.org/story</link><description>Karnataka topic</description>'

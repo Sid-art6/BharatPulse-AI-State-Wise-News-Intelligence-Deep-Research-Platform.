@@ -1,3 +1,34 @@
+# Version 1.3 — question-aware evidence and research reporting
+
+- Fixed named-person compound requests and expanded deterministic publisher metadata routing.
+- Added explicit question-slot relevance checks to prevent irrelevant but true headline restatements.
+- Added `research_insights.py` for deterministic source highlights, gap mapping and safe question-aware supplementary RSS discovery.
+- Connected the Research Report Builder to source highlights and question coverage, without treating unreviewed statements as AI-approved claims.
+- Updated the frontend to display distinct source reporting and missing evidence clearly; unverified national-feed geography is labelled as such.
+- Included offline regression tests and a localhost-only smoke-test script.
+- Included the hermetically mocked `test_api.py` to avoid the previous Windows no-provider false failure.
+
+---
+
+## v1.1 — Reliability & Intelligence Upgrade (24 Nov 2026)
+
+- Corrected selected-article versus general-definition routing with generic, incident-independent rules.
+- Restricted topical context as evidence for the chosen incident; publisher lists distinguish context from possible same-story reporting.
+- Preserved six explicit LangGraph stages, including skipped synthesis and review when no model is ready.
+- Tightened unsupported follow-up assumptions, citation gates and reviewer context.
+- Added platform-wide synthetic regression coverage and RSS numeral display improvements.
+- Existing data sources remain RSS title/excerpt metadata; no independent full-text or fact verification is claimed.
+
+## v1.0 candidate — Consolidated audit corrections (unreleased)
+
+- Intent-aware article chat: separate general knowledge, mixed questions, article summary/evidence index, and conservative RSS-grounded reporting.
+- Persistent chat output quality: correct banners for source-based responses, eliminate repeated caveats within a conversation, keep citations source-specific.
+- News search now visible; multiple tokens match indexed metadata, stale AJAX responses are discarded, and Reset Filters restores the feed.
+- Deep Research shows literal source-by-source RSS excerpt coverage, preserving actual six-stage LangGraph quality gates without invented claims.
+- Public-demo security: per-client plus global AI quotas, streamed request-body cap, RSS and weather/news read quotas; no API keys in the bundle.
+- News UI shows explicit AI connection status; additional offline regression tests cover audit failures.
+- Still requires full Windows regression and public Render deployment validation before release.
+
 # Changelog
 
 ## v0.10 — Regional RSS discovery and evidence quality (Windows test candidate)

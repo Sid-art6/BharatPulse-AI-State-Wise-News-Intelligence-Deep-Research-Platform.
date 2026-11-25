@@ -162,7 +162,7 @@ def test_api_version_and_public_source_metadata(tmp_path, monkeypatch):
     monkeypatch.setattr(core, 'DATA_DIR', tmp_path)
     monkeypatch.setattr(core, 'DB_PATH', tmp_path / 'test.db')
     with TestClient(app) as client:
-        assert client.get('/api/health').json()['version'] == '0.10.0'
+        assert client.get('/api/health').json()['version'] == '1.6.0'
         data = client.get('/api/meta').json()
         assert data['direct_publisher_feed_sections'] == len(REGION_FEEDS) + len(HINDU_FEEDS)
         assert data['providers']['indian_express_direct_rss'] == 'implemented_curated_sections'

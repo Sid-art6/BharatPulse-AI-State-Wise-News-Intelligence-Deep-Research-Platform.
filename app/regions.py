@@ -111,4 +111,6 @@ def detect_language(text: str, region: str = "All India") -> str:
             return name
     if any("\u0900" <= char <= "\u097f" for char in text):
         return "Marathi" if region in {"Maharashtra", "Goa"} else "Hindi"
-    return "English" if text.isascii() else "Unknown"
+    letters = [c for c in text if c.isalpha()]
+    latin = sum("A" <= c <= "Z" or "a" <= c <= "z" for c in letters)
+    return "English" if letters and latin / len(letters) >= .8 else "Unknown"

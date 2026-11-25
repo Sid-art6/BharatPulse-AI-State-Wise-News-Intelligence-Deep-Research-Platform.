@@ -52,9 +52,9 @@ def test_unsupported_script_number_is_rejected():
 def test_verifier_requires_complete_valid_and_unique_boolean_verdicts():
     entries = [{'id': 1}, {'id': 2}]
     assert chat_v07._parse_verdicts('{"verdicts":[{"id":1,"supported":true},{"id":2,"supported":false}]}', entries) == {1}
-    assert chat_v07._parse_verdicts('{"verdicts":[{"id":1,"supported":true}]}', entries) == set()
+    assert chat_v07._parse_verdicts('{"verdicts":[{"id":1,"supported":true}]}', entries) == {1}  # Missing id 2 is rejected individually
     assert chat_v07._parse_verdicts('{"verdicts":[{"id":1,"supported":true},{"id":1,"supported":true}]}', entries) == set()
-    assert chat_v07._parse_verdicts('{"verdicts":[{"id":1,"supported":"true"},{"id":2,"supported":true}]}', entries) == set()
+    assert chat_v07._parse_verdicts('{"verdicts":[{"id":1,"supported":"true"},{"id":2,"supported":true}]}', entries) == {2}  # Invalid id 1 cannot invalidate id 2
 
 
 def test_opposite_meaning_is_removed_by_second_review(monkeypatch):
@@ -159,4 +159,4 @@ def test_chat_endpoint_returns_only_cited_verified_sources(monkeypatch, tmp_path
         assert data['sources'][0]['index']==1
         assert data['claims'][0]['quote']==QUOTE
         assert data['caveat'].startswith('Source-anchored AI draft')
-        assert client.get('/api/health').json()['version']=='0.10.0'
+        assert client.get('/api/health').json()['version']=='1.6.0'

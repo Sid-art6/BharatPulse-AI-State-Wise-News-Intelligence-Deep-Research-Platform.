@@ -9,6 +9,7 @@ import httpx
 # Local .env is loaded automatically. Existing OS environment values take precedence.
 from pathlib import Path
 from dotenv import load_dotenv
+from .evidence_utils import has_meaningful_excerpt
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
 ENABLE_LLM_FILTER = os.getenv("ENABLE_LLM_FILTER", "false").strip().lower() in {"1", "true", "yes"}
@@ -46,7 +47,7 @@ SYSTEM = (
     "Cite each factual assertion by the given source number like [1]. "
     "When evidence is incomplete or conflicting, say so explicitly. "
     "Do not claim that a headline or snippet verifies the event or makes a source independent. "
-    "The news feed provides only metadata and short descriptions, NOT verified article full text. "
+    "Some sources include retrieved, publicly accessible publisher article passages. Others contain RSS metadata only. Read the evidence label per source; never claim full text when not supplied. "
     "Do not provide persuasive partisan political targeting or unverified allegations as fact."
 )
 
@@ -54,12 +55,19 @@ SYSTEM = (
 def source_context(sources: list[dict[str, Any]]) -> str:
     lines = []
     for index, item in enumerate(sources[:10], start=1):
+        excerpt = item.get('description') or ''
+        if not has_meaningful_excerpt(item.get('title', ''), excerpt, item.get('publisher', '')):
+            excerpt = ''
+        full_article = item.get('evidence_origin') == 'publisher_article'
+        evidence_text = excerpt[:6500] if full_article else excerpt[:550]
         lines.append(
             f"[{index}] Headline: {item['title'][:250]}\n"
             f"    Publisher: {item['publisher'][:100]}\n"
             f"    Feed timestamp (UTC): {item['published_at']}\n"
-            f"    RSS excerpt (may be incomplete): {item['description'][:550]}\n"
+            f"    Evidence type: {'ACCESSIBLE_PUBLISHER_ARTICLE_PASSAGES' if full_article else 'RSS_HEADLINE_OR_EXCERPT_ONLY'}\n"
+            f"    {'Verbatim article passages' if full_article else 'RSS excerpt (may be incomplete)'}: {evidence_text}\n"
             f"    Link: {item['url']}"
+            f"\n    Relation to selected article: {item.get('relationship', 'selected_article' if index == 1 else 'relation_unverified')}"
         )
     return "\n\n".join(lines)
 

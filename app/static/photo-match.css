@@ -1,0 +1,210 @@
+/* BharatPulse v1.0 · screenshot-led UI rebuild (3 separate functional screens).
+   Do not turn illustrative image assets into purported documentary evidence. */
+:root{--navy:#0b2051;--blue:#144d9c;--ink:#101b32;--line:#dce4f0;--green:#1d9b55;--muted:#64748b;--surface:#f8fafc}
+html,body{min-width:320px;scroll-behavior:auto}
+body{background:#fff;font-size:15px}
+.app-layout{display:flex;min-height:100vh;align-items:stretch}
+.topbar{position:fixed;top:0;left:0;right:0;z-index:20;height:108px;background:#fff;padding:0 48px;border-bottom:1px solid #dae2ed;box-shadow:0 1px 0 #f6f8fb}
+.topbar-brand{gap:18px;align-items:center}
+.topbar-logo{font-size:32px;letter-spacing:-.9px;color:#091944}
+.topbar-tagline{font-weight:500;font-size:19px;color:#293950}
+.topbar-rule{height:37px;border-color:#7c8a9e}
+.header-map-icon{width:62px;height:67px;object-fit:contain;mix-blend-mode:multiply}
+.topbar-skyline{width:600px;height:108px;opacity:.65;background:linear-gradient(170deg,transparent 0 51%,#ffb56770 51% 55%,transparent 56% 61%,#6abe7973 61% 65%,transparent 66%),linear-gradient(to top,#e5ebf250 0 16%,transparent 16%);mask-image:linear-gradient(to right,transparent,black 40%)}
+.sidebar{margin-top:108px;top:0;position:sticky;height:calc(100vh - 108px);min-height:calc(100vh - 108px);padding:28px 14px 18px;width:278px;flex:0 0 278px;box-shadow:none}
+.sidebar>.brand,.sidebar>.workspace-label{display:none}
+.side-nav{gap:11px;margin-top:4px}
+.nav-link{font-size:15px;font-weight:600;min-height:53px;padding:14px 16px;gap:14px;white-space:nowrap}
+.nav-link svg{width:23px;height:23px;stroke-width:2.2}
+.nav-link.active{background:#16488f;box-shadow:none;border-radius:10px}
+.pipeline-card{background:#f4f7fc;border-color:#edf1f8;min-height:148px;border-radius:15px;padding:20px}
+.pipeline-card .mini-label{display:none}
+.pipeline-card strong{margin:0;font-size:19px;font-weight:800}
+.pipeline-card p{font-size:12px;line-height:1.5;margin-top:8px}
+.sidebar-disclosure{display:none}
+.side-foot{font-size:10px;padding:14px 8px}
+.main-content{padding-top:108px;background:#fff;flex:1;min-width:0}
+.content-width{max-width:none;display:block;background:#fff;min-height:calc(100vh - 108px)}
+.content-width > :is(.intro-section,.metric-section,.intelligence-footer,.page-footer){display:none!important}
+body[data-screen="explorer"] .content-width > :not(#explorer),
+body[data-screen="research-showcase"] .content-width > :not(#research-showcase),
+body[data-screen="weather"] .content-width > :not(#weather),
+body[data-screen="regional-coverage"] .content-width > :not(#regional-coverage){display:none!important}
+body[data-screen="explorer"] #explorer,body[data-screen="research-showcase"] #research-showcase,body[data-screen="weather"] #weather,body[data-screen="regional-coverage"] #regional-coverage{display:block!important}
+.explorer-section,.weather-section,.research-showcase,.regional-section{border:0;background:#fff;padding:24px 26px 38px;margin:0;scroll-margin-top:0}
+.section-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.section-heading h2{font-size:29px;letter-spacing:-.7px;font-weight:800;margin:0 0 4px}
+.section-heading p{font-size:14px;color:#617085;max-width:none;margin:0}
+.section-heading .eyebrow{display:none}
+.mode-control{background:#f7f9fd;padding:3px;border-radius:9px;border-color:#dae5f2}
+.mode-btn{font-size:11px}
+.data-banner{margin:8px 0;padding:9px 12px;max-width:100%;display:flex;align-items:center;border-radius:10px;box-shadow:none}
+.data-banner .banner-icon{font-size:12px}
+.data-banner span,.data-banner strong{font-size:11px}
+#explorer .data-banner{max-width:100%}
+.filter-bar{margin:13px 0 8px;padding:13px 15px;align-items:end;justify-content:flex-start;gap:15px;border:1px solid var(--line);border-radius:13px;box-shadow:none}
+.filter-bar>.field{max-width:340px;flex:0 1 340px}
+.filter-bar>.field>span{font-size:11px;font-weight:800;color:#24314a;letter-spacing:0}
+.field select,.field input{height:43px;border-radius:8px;font-size:13px}
+.live-pill{font-size:12px;font-weight:800;background:#e7f9ed;padding:10px 14px;border-radius:8px;color:#16642e;white-space:nowrap;margin-bottom:3px}.live-pill span{color:#24b04c}
+.source-refresh-note{color:#6b7991;font-size:12px;white-space:nowrap;margin-bottom:13px}
+.filter-bar .refresh-btn{margin-left:auto;min-width:135px;height:43px;font-weight:700;border-radius:8px}
+.advanced-filters{max-width:640px;border:1px solid #e6eefa;border-radius:9px;margin:8px 0 7px;background:#fff;font-size:11px;color:#40628a}
+.advanced-filters summary{cursor:pointer;padding:8px 14px;font-weight:700;list-style:none}
+.advanced-filters summary::-webkit-details-marker{display:none}
+.advanced-filters summary>span{float:right}
+.advanced-filters-inner{display:grid;grid-template-columns:minmax(180px,.8fr) minmax(200px,1.2fr);gap:14px;padding:9px 13px 14px}
+.advanced-filters-inner .field{display:flex;flex-direction:column}
+.feed-status{margin:9px 0;color:#718099;font-size:10px}
+.topic-row{display:flex;gap:8px;flex-wrap:wrap;padding:9px 0 10px}
+.topic-btn{font-size:12px;border-radius:9px;letter-spacing:0;text-transform:none;padding:10px 14px;background:#f8fafc;border-color:#e4eaf3;color:#55647a}
+.topic-btn.active{background:#164d98;color:#fff}
+.results-header{font-size:11px;margin:5px 0 13px}
+.news-layout{grid-template-columns:minmax(0,1.9fr) minmax(270px,.9fr);gap:17px}
+.news-grid{gap:12px}
+.news-card{display:grid;grid-template-columns:185px minmax(0,1fr);grid-template-rows:auto auto auto 1fr auto;gap:5px 15px;padding:11px;border:1px solid #dfe5ef;border-radius:15px;min-height:146px;box-shadow:0 2px 8px #09265f09}
+.news-card:before{display:none!important}
+.news-card-thumb{grid-column:1;grid-row:1/6;position:relative;min-height:128px;border-radius:12px;background:linear-gradient(160deg,#dfecfc,#d9f4e5);display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;color:#2e639e}
+.news-card-thumb>img{display:block;width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.news-card-thumb>span:not(.source-thumbnail span){position:absolute;bottom:5px;left:6px;background:#ffffffe9;color:#657789;font-size:9px;padding:3px 6px;border-radius:5px}
+.source-thumbnail>span{font-size:46px}.source-thumbnail>small{letter-spacing:3px;font-weight:800;font-size:9px}
+.news-card .card-top,.news-card h3,.news-card .excerpt-label,.news-card>p,.news-card .card-footer{grid-column:2}
+.news-card h3{font-size:15px;line-height:1.32;letter-spacing:-.2px;color:#131b31;font-weight:800;margin:2px 0 0}
+.news-card .card-top{justify-content:space-between;display:flex}
+.category{background:#edf5fe;color:#245c9f;border:0;padding:3px 6px;font-size:10px}
+.news-card p{font-size:11px;line-height:1.4;color:#5f6d80;-webkit-line-clamp:2;margin:0}
+.news-card .excerpt-label{display:none}
+.news-card .card-footer{border:0;margin:0;padding:0;display:flex;align-items:end;justify-content:space-between;gap:8px}
+.card-source{max-width:55%;font-size:10px;line-height:1.5;color:#58718f}
+.card-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.card-actions button,.card-actions a{font-size:10px;border-radius:7px;padding:8px 10px}
+.card-actions button:first-child{background:#1550a0}
+.news-evidence{position:sticky;top:16px;border-radius:16px;padding:12px;min-height:630px}
+.news-insight-top{background:#eaf9ee;min-height:100px;padding:18px 14px;border-radius:13px}
+.news-insight-top h3{font-size:17px}.news-insight-top p{font-size:12px}
+.insight-icon{font-size:25px}.news-evidence h4{margin:20px 7px 13px}
+.source-stat{padding:19px 8px;font-size:13px}
+.insight-topic{font-size:12px;padding:13px 12px;border-radius:9px;margin:12px 0}
+.news-insight-note{margin-top:22px}
+/* Full-width report screen: stage trace and source inventory remain sourced from live research only. */
+.research-showcase{padding-top:24px}
+.report-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;background:#fff;border:1px solid #e0e7f1;padding:10px 16px;border-radius:12px;margin:14px 0 14px;font-size:12px}
+.report-toolbar>a:first-child{color:#164989;font-weight:700}.report-toolbar .showcase-link{margin-left:auto}
+.report-toolbar button{border-radius:9px;border:1px solid #d1dff0;background:#fff;color:#145295;font-size:11px;padding:11px 15px;font-weight:700}
+.report-toolbar button:disabled{opacity:.45;cursor:not-allowed}
+.report-separator{margin:0 6px;color:#9daec7}
+.research-showcase-card{border:0;background:transparent;box-shadow:none;padding:0}
+.showcase-feature-head{background:#fff;padding:19px 19px 16px;border:1px solid #dfe8f1;border-radius:12px;margin:0 0 12px;min-height:115px}
+.showcase-feature-head h3{font-size:22px;line-height:1.3;margin:7px 0}
+.showcase-feature-head p{font-size:12px}
+.showcase-feature-head .showcase-tag{font-size:10px;color:#23599b}
+.trace-heading{background:#fff;border:1px solid #dfebf3;border-bottom:0;border-radius:12px 12px 0 0;display:flex;align-items:center;justify-content:space-between;gap:15px;padding:15px 16px 7px}
+.trace-heading strong{font-size:15px}.trace-heading small{font-size:10px;color:#647c95}
+.showcase-steps{background:#fff;border:1px solid #dfebf3;border-top:0;padding:8px 12px 16px;margin:0 0 14px;border-radius:0 0 12px 12px;gap:7px}
+.showcase-steps>div{border-radius:9px;padding:12px 8px;min-height:100px;background:#f2fbf5;border-color:#d7eee0}
+.showcase-steps b{background:#2ea86a;color:#fff;font-size:9px}
+.showcase-steps strong{font-size:11px}
+.showcase-steps small{font-size:10px}
+.research-showcase-columns{grid-template-columns:minmax(0,1.8fr) minmax(280px,.8fr);gap:14px}
+.showcase-content,.showcase-source-panel{background:#fff;border:1px solid #dfe7f3;border-radius:12px;min-height:285px}
+.showcase-content h3,.showcase-source-panel h3{font-size:16px}
+.showcase-source-panel{max-height:72vh;overflow:auto}
+.showcase-source-panel .source-row{background:#f7faff;border-radius:7px;padding:12px;margin:10px 0;font-size:11px}
+.source-principles-heading{margin-top:25px!important;font-size:12px!important}
+/* Reflow actual weather widgets into the two-column screenshot composition. */
+body[data-screen="weather"] .weather-section{display:grid!important;grid-template-columns:minmax(360px,.94fr) minmax(450px,1.06fr);grid-template-rows:auto auto auto auto auto;column-gap:17px;row-gap:15px;align-items:start}
+.weather-section>.section-heading{grid-column:1/-1;grid-row:1;margin-bottom:0}
+.weather-section>.weather-controls{grid-column:1;grid-row:2;margin:0;padding:12px 15px;display:flex;flex-wrap:nowrap;align-items:end}
+.weather-section>.data-banner{grid-column:1/-1;grid-row:6;margin:0}
+.weather-section .weather-controls .field{flex:1 1 auto;min-width:0}
+.weather-section .weather-controls .refresh-btn{min-width:125px;font-size:11px;padding:0 10px}
+.weather-section .weather-controls .weather-update{display:none}
+.weather-summary-grid,.weather-bottom-grid{display:contents}
+.weather-main-card{grid-column:1;grid-row:3;min-height:272px;padding:14px;border-radius:15px;display:grid;grid-template-columns:35% 1fr;gap:15px;overflow:hidden}
+.weather-city-photo{width:100%;height:100%;min-height:235px;max-height:288px;object-fit:cover;border-radius:11px;align-self:stretch}
+.weather-current-info{min-width:0;align-self:center}
+.weather-main-card .mini-label{color:#7898b0;font-size:9px;letter-spacing:.8px}
+.weather-main-card h3{font-size:25px;margin:12px 0 8px;color:#0b2143}
+.weather-temp{font-size:51px;color:#1653a3;font-weight:800;letter-spacing:-2px;line-height:1.2}
+.weather-main-card>p,.weather-current-info>p{color:#657489;font-size:13px;margin:7px 0 0}
+.weather-attributes{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;padding-top:12px;border-top:1px solid #e3e9f4;color:#244468;font-size:11px}
+.illustrative-note{display:block;color:#8796a8;font-size:9px;line-height:1.4;margin-top:15px}
+.weather-map-panel{grid-column:2;grid-row:2/4;border-radius:15px;min-height:427px;padding:14px;overflow:hidden;isolation:isolate}
+.weather-map-panel .map-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:12px}
+.map-title strong{font-size:16px;color:#0e244a}
+#weatherMap{position:relative;width:100%;height:335px;min-height:335px;overflow:hidden;border-radius:12px;background:#e8f1f2;isolation:isolate}
+#weatherMap .leaflet-pane,#weatherMap .leaflet-map-pane,#weatherMap .leaflet-tile-pane{max-width:none}
+#weatherMap .leaflet-container{width:100%;height:100%}
+.weather-map-panel .map-fallback{position:relative!important;z-index:2}
+.map-legend{font-size:10px;line-height:1.4;margin-top:9px}
+.weather-section>.weather-subheading{display:none}
+.weather-daily-wrap{grid-column:1;grid-row:4;background:#fff;border:1px solid #e1e8f2;border-radius:14px;padding:16px;min-width:0}
+.weather-daily-wrap>h3{font-size:16px;margin:0 0 14px;color:#182c4b}
+.weather-daily{grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;background:none;border:0;margin:0;min-width:0}
+.weather-day{border-radius:9px;padding:9px 4px;text-align:center;min-height:124px}
+.weather-day strong{font-size:10px}.weather-day .day-condition{font-size:9px;min-height:35px;margin:10px 0 6px}
+.weather-day .day-temps{font-size:12px;white-space:nowrap}
+.weather-day .day-rain{font-size:9px;color:#607790}
+.weather-news-panel{grid-column:2;grid-row:4;border-radius:14px;min-height:205px;padding:14px}
+.weather-news-panel .weather-subheading{display:block;margin-bottom:8px}
+.weather-news-panel .weather-subheading h3{font-size:16px;margin:0 0 5px}
+.weather-news-list{display:flex;flex-direction:column;gap:9px}
+.weather-news-item{position:relative;margin:0;border:1px solid #e1e8f3;border-radius:12px;padding:13px 11px;background:#fff;font-size:11px;min-height:65px}
+.weather-news-item a{font-weight:800;color:#122d57}
+.weather-news-item small{display:block;color:#7c8ea4;margin-top:6px}
+.weather-news-actions button{border-radius:7px;font-size:10px;padding:6px 10px}
+.weather-ai-panel{grid-column:1/-1;grid-row:5;border-radius:14px}
+@media(max-width:1420px){.topbar{padding:0 31px}.topbar-logo{font-size:27px}.topbar-tagline{font-size:16px}.sidebar{width:238px;flex-basis:238px}.news-card{grid-template-columns:135px 1fr}.news-card-thumb{min-height:120px}.card-source{max-width:100%}.card-actions a{display:none}.weather-section .weather-controls{flex-wrap:wrap}.weather-main-card{grid-template-columns:32% 1fr}.weather-city-photo{min-height:210px}.weather-temp{font-size:42px}}
+@media(max-width:1100px){.topbar-tagline{font-size:13px}.sidebar{width:208px;flex-basis:208px}.nav-link{font-size:12px;gap:8px}.news-layout{grid-template-columns:1fr}.news-evidence{min-height:0;position:static}.news-card{grid-template-columns:145px 1fr}.research-showcase-columns{grid-template-columns:1fr}body[data-screen="weather"] .weather-section{grid-template-columns:1fr;display:block!important}.weather-section>.section-heading,.weather-section>.weather-controls,.weather-main-card,.weather-map-panel,.weather-daily-wrap,.weather-news-panel,.weather-ai-panel,.weather-section>.data-banner{margin-bottom:16px}.weather-summary-grid,.weather-bottom-grid{display:contents}.weather-city-photo{max-height:250px}}
+@media(max-width:740px){.topbar{height:70px;padding:0 12px}.header-map-icon{width:37px;height:42px}.topbar-logo{font-size:18px}.topbar-brand{gap:8px}.topbar-rule{height:23px}.topbar-tagline{font-size:9px}.topbar-skyline{display:none}.sidebar{position:static;margin-top:70px;width:100%;height:auto;min-height:0;padding:8px;display:block}.side-nav{display:flex;gap:5px;overflow-x:auto;margin:0;flex-wrap:nowrap}.nav-link{padding:11px 9px;min-height:40px;font-size:10px;border-radius:7px}.nav-link svg{width:14px;height:14px}.sidebar-bottom{display:none}.app-layout{display:block}.main-content{padding-top:0}.explorer-section,.research-showcase,.weather-section,.regional-section{padding:18px 12px}.section-heading h2{font-size:22px}.section-heading p{font-size:11px}.section-heading{flex-wrap:wrap}.filter-bar{flex-wrap:wrap}.filter-bar>.field{max-width:none;flex:1 1 100%}.filter-bar .refresh-btn{margin:0;flex:1 1 100%}.source-refresh-note{display:none}.advanced-filters-inner{grid-template-columns:1fr}.news-card{grid-template-columns:92px 1fr;padding:9px;gap:5px 10px}.news-card-thumb{min-height:100px}.news-card h3{font-size:12px}.news-card p{font-size:10px}.news-card .card-footer{flex-direction:column;align-items:flex-start}.card-actions{justify-content:flex-start}.card-actions button{font-size:9px;padding:6px}.report-toolbar{flex-wrap:wrap}.trace-heading small{display:none}.showcase-steps{flex-wrap:wrap}.showcase-steps>div{flex:1 1 28%}.weather-main-card{display:grid;grid-template-columns:35% 1fr}.weather-temp{font-size:35px}.weather-daily{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media print{.sidebar,.topbar,.report-toolbar,.weather-section,.explorer-section,.regional-section,.drawer,.drawer-backdrop{display:none!important}.main-content{padding-top:0}body[data-screen="research-showcase"] .research-showcase{padding:0;display:block!important}.research-showcase-columns{grid-template-columns:1fr}.showcase-source-panel{max-height:none;overflow:visible}.showcase-steps>div{break-inside:avoid}}
+/* The section visibility rule uses an ID selector; match it to apply grid layout. */
+@media(min-width:1101px){body[data-screen="weather"] #weather{display:grid!important}}
+/* On browsers that cannot download the Leaflet CDN stylesheet, keep its tile
+   panes clipped inside the map instead of allowing unpositioned tiles to float. */
+#weatherMap.leaflet-container{position:relative;overflow:hidden;outline:0}
+#weatherMap .leaflet-pane,#weatherMap .leaflet-tile,#weatherMap .leaflet-marker-icon,#weatherMap .leaflet-marker-shadow,#weatherMap .leaflet-tile-container,#weatherMap .leaflet-pane>svg,#weatherMap .leaflet-pane>canvas,#weatherMap .leaflet-zoom-box,#weatherMap .leaflet-image-layer,#weatherMap .leaflet-layer{position:absolute;left:0;top:0}
+#weatherMap .leaflet-map-pane{z-index:400}#weatherMap .leaflet-tile-pane{z-index:200}#weatherMap .leaflet-overlay-pane{z-index:400}#weatherMap .leaflet-shadow-pane{z-index:500}#weatherMap .leaflet-marker-pane{z-index:600}#weatherMap .leaflet-tooltip-pane{z-index:650}#weatherMap .leaflet-popup-pane{z-index:700}
+#weatherMap .leaflet-tile{width:256px;height:256px;visibility:hidden}#weatherMap .leaflet-tile-loaded{visibility:inherit}
+#weatherMap img.leaflet-tile{max-width:none!important;max-height:none!important}
+#weatherMap .leaflet-control-container{position:relative;z-index:500}#weatherMap .leaflet-control{pointer-events:auto}
+.weather-main-card .weather-update{display:block!important;margin-top:6px;color:#74869d;font-size:9px;line-height:1.5}
+@media(max-width:1100px){body[data-screen="weather"] #weather{display:block!important}}
+/* Offline geographic fallback based on a schematic Natural Earth India outline.
+   The overlay displays the selected real city forecast; no fake state heatmap. */
+.weather-map-panel.offline-map .map-fallback{display:block!important;position:relative!important;min-height:337px;margin:0;padding:0;overflow:hidden;border:0;border-radius:12px;background:#eaf4ff url('/static/assets/india-location-schematic.svg') center/100% 100% no-repeat}
+.weather-map-panel.offline-map .map-fallback[hidden]{display:none!important}
+.weather-map-panel.offline-map .schematic-title{position:absolute;top:12px;left:13px;z-index:3;font-size:10px;font-weight:800;letter-spacing:1px;color:#2d628f;background:#ffffffd9;padding:7px 10px;border-radius:6px}
+.weather-map-panel.offline-map .fallback-city-marker{position:absolute;left:35%;top:67%;transform:translate(-50%,-50%);z-index:3;background:#fff;color:#14539c;font-size:12px;font-weight:800;padding:9px 11px;white-space:nowrap;border-radius:12px;border:2px solid #2667bb;box-shadow:0 4px 14px #143f7820}
+.weather-map-panel.offline-map .fallback-city-marker:before{content:'●';color:#1d5dc0;margin-right:5px}
+.weather-map-panel.offline-map .schematic-note{position:absolute;bottom:9px;left:10px;right:10px;z-index:3;font-size:10px;color:#415d76;text-align:center;background:#fffffff2;border-radius:7px;padding:8px 10px;box-shadow:0 2px 7px #17447718}
+
+/* v1.0 audit corrections: search visible and filter reset accessible */
+.search-toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin:11px 0 8px;padding:10px 13px;border:1px solid #e1e9f5;border-radius:11px;background:#fff}
+.search-toolbar>.field{flex:1 1 300px;max-width:540px;min-width:180px}
+.search-toolbar .field>span{font-size:11px;font-weight:700;color:#31547b;display:block;margin-bottom:6px}
+.search-toolbar .search-wrap{width:100%}
+.search-toolbar input{height:42px;width:100%}
+.clear-filters-btn{height:42px;border:1px solid #cbd9e8;color:#245287;background:#f6f9fc;border-radius:8px;padding:0 14px;font-weight:700;font-size:12px}
+.clear-filters-btn:hover{background:#eaf3fc}
+.search-help{font-size:11px;color:#71839b;flex:1 0 175px;line-height:1.4}
+.advanced-filters{max-width:450px}
+@media(max-width:720px){.search-toolbar{align-items:stretch}.search-toolbar>.field,.search-help{flex-basis:100%;max-width:none}.clear-filters-btn{width:100%}}
+
+/* Show the extent of actual source evidence instead of fake report depth. */
+.source-comparison{display:grid;gap:10px}
+.source-comparison>h3,.source-comparison>.research-muted{margin-bottom:0}
+.comparison-item{padding:13px 14px;background:#f7faff;border:1px solid #e1e9f3;border-radius:10px}
+.comparison-head{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:center}
+.comparison-head strong{font-size:12px;color:#203f67}
+.comparison-head small{font-size:10px;color:#677b92}
+.comparison-item>p{font-size:12px;line-height:1.5;margin:7px 0}
+.comparison-item blockquote{padding:10px 12px;border-left:3px solid #75aeea;background:#fff;margin:4px 0;font-size:11px;line-height:1.5}
+.comparison-item>small{font-size:10px;color:#8493a3}
+
+/* Provider readiness visible on the news dashboard. */
+.news-toolbar-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.header-ai-check{border:1px solid #c7dbf1;background:#edf5fd;color:#1b508a;border-radius:9px;padding:10px 12px;font-size:11px;font-weight:800;white-space:nowrap}
+.header-ai-check:hover:not(:disabled){background:#dcecfb}
+.header-ai-check:disabled{cursor:default;opacity:.75}
+@media(max-width:640px){.news-toolbar-actions{width:100%}.header-ai-check{font-size:10px;padding:8px}}

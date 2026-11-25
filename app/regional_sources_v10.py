@@ -70,4 +70,5 @@ HINDU_FEEDS: dict[str, FeedSpec] = {
 
 def feeds_for_region(region: str) -> tuple[FeedSpec, ...]:
     """0–2 fixed publisher-hosted sections for a watched region."""
-    return tuple(spec for spec in (REGION_FEEDS.get(region), HINDU_FEEDS.get(region)) if spec)
+    independent = FeedSpec("Scroll.in", "https://feeds.scroll.in/feeds/editors_picks", "All India") if region == "All India" else None
+    return tuple(spec for spec in (REGION_FEEDS.get(region), HINDU_FEEDS.get(region), independent) if spec)
