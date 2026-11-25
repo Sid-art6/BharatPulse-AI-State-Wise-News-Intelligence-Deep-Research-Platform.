@@ -13,6 +13,8 @@
 
 **An AI-powered news intelligence platform for exploring Indian regional reporting, researching individual stories, and viewing city-level weather.**
 
+**Live Demo:** [Explore BharatPulse AI](https://bharatpulse-ai.onrender.com/)
+
 [Features](#features) · [Architecture](#architecture) · [Run locally](#getting-started) · [Deployment](#deployment) · [Security](#security-and-limitations)
 
 </div>
